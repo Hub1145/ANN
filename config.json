@@ -2,8 +2,8 @@
   "api_accounts": [
     {
       "name": "Account 1",
-      "api_key": "Fev9LPoUn9rEmyrnGMRwgevxsIyaaSyDI5ZE0dHzNKoDUu1OSlUimvfLIwUPmZQQ",
-      "api_secret": "cT6iFvD21S6GyeI2x6ZM0KOS9D6SwXg3R6ZcJ8kdSC5d7dj3AzHORGVHrDPFOK9K",
+      "api_key": "",
+      "api_secret": "",
       "enabled": true
     },
     {
