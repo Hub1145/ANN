@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title id="title-tag">Binance Scaler - SmartTrade</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+
+<body>
+    <!-- Top Balance Hero -->
+    <div class="balance-hero">
+        <div class="server-ip-display text-center position-absolute top-0 start-50 translate-middle-x mt-2 d-flex align-items-center gap-2">
+            <div id="connection-status-dot" class="status-dot-pulse bg-secondary" style="width:8px; height:8px; border-radius:50%"></div>
+            <small class="text-secondary" id="label-server_ip">Server IP: </small>
+            <small class="text-accent fw-bold">{{ server_ip }}</small>
+        </div>
+        <div class="total-balance-circle">
+            <span class="hero-total-val" id="total-equity-val">$0.00</span>
+            <span class="hero-total-label" id="label-total_balance_header">Total Balance</span>
+        </div>
+        <div class="d-flex justify-content-center gap-4 flex-wrap" id="individual-accounts-container">
+            <!-- Populated by JS -->
+        </div>
+        <div class="position-absolute top-0 end-0 p-3 d-flex gap-2">
+            <select class="form-select form-select-sm bg-transparent border-0 text-light w-auto" id="lang-select">
+                <option value="en-US">EN</option>
+                <option value="pt-BR">PT</option>
+            </select>
+            <button class="btn btn-sm btn-accent px-4 d-flex align-items-center gap-2" id="startStopBtn">
+                <span class="spinner-border spinner-border-sm d-none" role="status" aria-hidden="true"
+                    id="startStopSpinner"></span>
+                <span id="label-start">Start</span>
+            </button>
+            <button class="btn btn-sm btn-outline-secondary" id="configBtn"><i class="bi bi-gear-fill"></i></button>
+        </div>
+    </div>
+
+    <div class="strategy-pillars">
+        <!-- Pillar 1: Units & Buy Price -->
+        <div class="pillar">
+            <div class="pillar-header">
+                <div class="d-flex align-items-center gap-2">
+                    <span id="label-units_header">Units</span>
+                    <i class="bi bi-wallet2 text-secondary"></i>
+                </div>
+                <div class="d-flex align-items-center gap-1">
+                    <select class="form-select form-select-sm w-auto border-0 bg-transparent text-accent fw-bold px-0"
+                        id="selectActiveSymbol">
+                        <!-- Symbols -->
+                    </select>
+                    <button class="btn btn-xs btn-outline-secondary border-0 p-0" id="addSymbolBtn" title="Add Symbol">
+                        <i class="bi bi-plus-circle text-accent"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="pillar-content">
+                <div class="pillar-tabs mb-3" id="direction-tabs">
+                    <div class="pillar-tab active" data-direction="LONG" id="label-buy_direction">Buy</div>
+                    <div class="pillar-tab" data-direction="SHORT" id="label-sell_direction">Sell</div>
+                </div>
+
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <span class="small" id="label-use_existing">Use Existing Assets <i
+                            class="bi bi-question-circle text-secondary"></i></span>
+                    <label class="switch-toggle">
+                        <input type="checkbox" id="useExistingToggle">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+
+                <div class="mb-4">
+                    <div class="input-group input-group-sm mb-1">
+                        <select class="form-select bg-dark text-light border-secondary" id="selectTradeAmountMode"
+                            style="max-width: 90px;">
+                            <option value="fixed">USDC</option>
+                            <option value="pct">% Bal</option>
+                        </select>
+                        <input type="number" class="form-control" id="inputTradeAmountUSDC" value="100">
+                        <span class="input-group-text d-none" id="asset-symbol-label">USDC</span>
+                        <span class="input-group-text" id="pct-symbol-label">%</span>
+                    </div>
+                </div>
+
+                <div class="pillar-header px-0 pb-2 mb-2 border-0" id="label-buy_price">Order Price</div>
+                <div class="pillar-tabs mb-2" id="buy-type-tabs">
+                    <div class="pillar-tab active" data-type="LIMIT" id="label-limit">Limit</div>
+                    <div class="pillar-tab" data-type="MARKET" id="label-market">Market</div>
+                    <div class="pillar-tab" data-type="CONDITIONAL" id="label-conditional">Cond.</div>
+                </div>
+
+                <div class="small text-secondary mb-3" style="min-height: 40px" id="order-type-desc">
+                    Will be placed on the exchange order book. Can’t buy higher than the current price
+                </div>
+
+                <div id="cond-options" class="d-none mb-3">
+                    <div class="pillar-tabs mb-2" id="cond-type-tabs">
+                        <div class="pillar-tab active" data-type="COND_LIMIT" id="label-cond_limit_tab">Cond. Limit
+                        </div>
+                        <div class="pillar-tab" data-type="COND_MARKET" id="label-cond_market_tab">Cond. Market
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <div class="mb-2">
+                        <label class="small text-secondary mb-1 d-none" id="label-trigger_price">Order Price</label>
+                        <div class="input-group input-group-sm">
+                            <input type="number" class="form-control" id="inputEntryPrice" placeholder="0.00">
+                            <span class="input-group-text" id="entry-price-asset-label">USDC</span>
+                        </div>
+                    </div>
+
+                    <div id="order-price-group" class="mb-2 d-none">
+                        <!-- Redundant field removed -->
+                    </div>
+
+                    <div class="d-flex justify-content-center gap-3 small px-1 mb-3">
+                        <span class="text-secondary">Bid: <span id="bid-price"
+                                class="text-success cursor-pointer fw-bold">0.00</span></span>
+                        <span class="text-secondary">Ask: <span id="ask-price"
+                                class="text-danger cursor-pointer fw-bold">0.00</span></span>
+                    </div>
+
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <span class="small" id="label-trailing_buy">Trailing Buy <i
+                                class="bi bi-question-circle text-secondary"></i></span>
+                        <label class="switch-toggle">
+                            <input type="checkbox" id="trailingBuyToggle">
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+                    <div id="trailing-buy-settings" class="d-none mb-3">
+                        <div class="input-group input-group-sm">
+                            <input type="number" class="form-control" id="trailingBuyDeviation" value="1" step="0.1">
+                            <span class="input-group-text">%</span>
+                        </div>
+                    </div>
+
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <span class="small" id="label-consolidated_reentry">Consolidated Re-entry <i
+                                class="bi bi-question-circle text-secondary" id="help-consolidated_reentry"
+                                title=""></i></span>
+                        <label class="switch-toggle">
+                            <input type="checkbox" id="consolidatedReentryToggle">
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+
+                    <div id="cost-basis-group" class="mb-2 d-none">
+                        <div class="separator my-2"></div>
+                        <label class="small text-secondary mb-1" id="label-cost_basis">Were Bought For</label>
+                        <div class="input-group input-group-sm">
+                            <input type="number" class="form-control" id="inputCostBasis" placeholder="0.00" step="0.0001">
+                            <span class="input-group-text">USDC</span>
+                        </div>
+                    </div>
+
+                    <div class="separator my-2"></div>
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <span class="small fw-bold" id="label-entry_grid">Entry Grid (DCA) <i class="bi bi-question-circle text-secondary"></i></span>
+                        <label class="switch-toggle">
+                            <input type="checkbox" id="entryGridToggle">
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+                    <div id="entry-grid-settings" class="d-none">
+                        <div class="d-flex gap-1 mb-2">
+                            <div class="input-group input-group-sm">
+                                <span class="input-group-text small" id="label-entry_price_label">Price</span>
+                                <input type="number" class="form-control" id="inputEntryGridPrice" placeholder="0.00">
+                            </div>
+                            <div class="input-group input-group-sm">
+                                <span class="input-group-text small" id="label-entry_volume_label">Vol %</span>
+                                <input type="number" class="form-control" id="inputEntryGridVolume" placeholder="100">
+                            </div>
+                            <button class="btn btn-sm btn-accent" id="addEntryTargetBtn"><i class="bi bi-plus-lg"></i></button>
+                        </div>
+                        <div id="entry-targets-list" class="small text-secondary mb-2">
+                            <!-- Populated by JS -->
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mt-auto pt-3 border-top">
+                    <div class="pillar-header px-0 pb-1 mb-1 border-0" id="label-total">Total</div>
+                    <div class="input-group input-group-sm mb-2">
+                        <input type="number" class="form-control" id="inputTotalUnits" readonly>
+                        <span class="input-group-text" id="base-asset-label">USDC</span>
+                    </div>
+                    <div id="min-req-warning" class="alert-min-req mb-3 d-none">
+                        <i class="bi bi-exclamation-circle-fill"></i>
+                        <span id="label-min_req_warning">Trade does not meet minimum requirements</span>
+                    </div>
+                    <div class="btn-group btn-group-pct w-100" id="pct-buttons">
+                        <button class="btn btn-outline-secondary" data-pct="5">5%</button>
+                        <button class="btn btn-outline-secondary" data-pct="10">10%</button>
+                        <button class="btn btn-outline-secondary" data-pct="25">25%</button>
+                        <button class="btn btn-outline-secondary" data-pct="50">50%</button>
+                        <button class="btn btn-outline-secondary" data-pct="100">100%</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Pillar 2: Take Profit -->
+        <div class="pillar pillar-wrapper">
+            <div id="tp-overlay" class="pillar-overlay d-none">
+                <button class="set-tp-sl-btn" id="btn-enable-tp"><span id="label-set_tp_btn">Set Take
+                        Profit</span></button>
+            </div>
+            <div class="pillar-header">
+                <span id="label-take_profit_header">Take Profit</span>
+                <label class="switch-toggle">
+                    <input type="checkbox" id="tpToggle">
+                    <span class="slider"></span>
+                </label>
+            </div>
+            <div class="pillar-content">
+                <div class="pillar-tabs mb-2" id="tp-type-tabs">
+                    <div class="pillar-tab active" data-type="LIMIT" id="label-tp_limit_order">Limit Order</div>
+                    <div class="pillar-tab" data-type="MARKET" id="label-tp_market_order">Market Order</div>
+                </div>
+                <div class="small text-secondary mb-3 text-center" id="label-tp_description">The order will be placed on the exchange beforehand</div>
+
+                <!-- TP Distribution Chart & Mini List -->
+                <div class="d-flex align-items-center gap-3 mb-4">
+                    <div class="tp-chart-container">
+                        <div class="tp-doughnut" id="tpDoughnutChart">
+                            <div class="tp-doughnut-inner">
+                                <span class="small text-secondary">Available:</span>
+                                <span class="fw-bold" id="tp-available-pct">100%</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="flex-grow-1">
+                        <div class="d-flex justify-content-between small text-secondary mb-1 px-1">
+                            <span>Percent</span>
+                            <span>Quantity</span>
+                        </div>
+                        <div id="tp-mini-list" class="tp-mini-list">
+                            <!-- Populated by JS -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TP Inputs -->
+                <div class="mb-3">
+                    <label class="small text-secondary mb-1" id="label-tp_percent">Percent</label>
+                    <div class="input-group-3commas mb-3">
+                        <input type="number" id="inputTpPercent" placeholder="0.00" step="0.1" class="flex-grow-1">
+                        <span class="unit-text small text-secondary me-2">%</span>
+                        <span class="unit-text small text-accent fw-bold me-2" id="tp-price-preview">0.00 USDC</span>
+                    </div>
+
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <label class="small text-secondary" id="label-tp_volume">Volume</label>
+                        <span class="small text-secondary" id="tp-volume-usdc-preview">0.00 USDC</span>
+                    </div>
+                    <div class="d-flex align-items-center gap-3 mb-4">
+                        <div class="flex-grow-1">
+                            <input type="range" class="leverage-slider w-100" min="0.1" max="100" step="0.1" id="tpVolumeSlider" value="12.5">
+                            <div class="d-flex justify-content-between x-small text-secondary mt-1">
+                                <span>12.5%</span>
+                            </div>
+                        </div>
+                        <div class="input-group-3commas" style="width: 100px;">
+                            <input type="number" id="inputTpVolume" value="12.5" step="0.1" class="text-center">
+                            <span class="unit-text small text-secondary me-2">%</span>
+                        </div>
+                    </div>
+
+                    <div class="d-flex flex-column gap-2">
+                        <div class="d-flex gap-2">
+                            <button class="btn btn-sm btn-outline-danger flex-shrink-0 px-3" id="cancelTpBtn">
+                                <i class="bi bi-x-lg"></i> Cancel
+                            </button>
+                            <button class="btn btn-sm btn-accent flex-grow-1" id="addTpTargetBtn">
+                                Add TP target
+                            </button>
+                        </div>
+                        <button class="btn btn-sm btn-outline-info w-100" onclick="resetTpLadder()" id="resetTpBtn">
+                            <i class="bi bi-arrow-counterclockwise"></i> Reset to Standard Ladder (8 Levels)
+                        </button>
+                    </div>
+                </div>
+
+                <div class="separator mb-3"></div>
+
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <span class="small fw-bold" id="label-trailing_tp_last">Trailing Take Profit for last target <i
+                            class="bi bi-question-circle text-secondary"></i></span>
+                    <label class="switch-toggle">
+                        <input type="checkbox" id="trailingTpToggle">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+
+                <div id="trailing-params" class="px-2 d-none">
+                    <div class="small text-secondary mb-1">Follow max price with deviation (%)</div>
+                    <input type="range" class="leverage-slider" min="0.1" max="10" step="0.1" id="trailingDeviation">
+                    <div class="d-flex justify-content-between small text-secondary">
+                        <span>0.1%</span>
+                        <span class="text-accent fw-bold" id="trailing-deviation-label">0.5%</span>
+                        <span>10%</span>
+                    </div>
+                </div>
+
+                <div class="separator mt-3 mb-2"></div>
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                    <span class="small fw-bold" id="label-consolidated_tp">Aggregated Take Profit (Option A) <i
+                            class="bi bi-question-circle text-secondary" id="help-consolidated_tp" title=""></i></span>
+                    <label class="switch-toggle">
+                        <input type="checkbox" id="consolidatedTpToggle">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                <div class="small text-secondary mb-2" id="label-desc_consolidated_tp">Groups all profit volume into a single target at the first defined price.</div>
+
+            </div>
+        </div>
+
+        <!-- Pillar 3: Stop Loss -->
+        <div class="pillar pillar-wrapper">
+            <div id="sl-overlay" class="pillar-overlay d-none">
+                <button class="set-tp-sl-btn" id="btn-enable-sl"><span id="label-set_sl_btn">Set Stop
+                        Loss</span></button>
+            </div>
+            <div class="pillar-header">
+                <span id="label-stop_loss_header">Stop Loss</span>
+                <label class="switch-toggle">
+                    <input type="checkbox" id="stopLossToggle">
+                    <span class="slider"></span>
+                </label>
+            </div>
+            <div class="pillar-content">
+                <div class="pillar-tabs mb-2" id="sl-type-tabs">
+                    <div class="pillar-tab active" data-type="COND_LIMIT" id="label-sl_limit_order">Cond. Limit Order
+                    </div>
+                    <div class="pillar-tab" data-type="COND_MARKET" id="label-sl_market_order">Cond. Market Order</div>
+                </div>
+                <div class="small text-secondary mb-3" id="label-sl_description">The order will be placed on the
+                    exchange order book when the price meets Stop Loss conditions</div>
+
+                <!-- Price (Trigger Price) -->
+                <div class="mb-3">
+                    <label class="small text-secondary mb-1" id="label-sl_trigger_label">Price</label>
+                    <div class="input-group-3commas">
+                        <div class="dropdown">
+                            <button class="btn btn-outline-secondary btn-sm dropdown-toggle border-0 py-0" type="button"
+                                id="slTriggerSourceBtn" data-bs-toggle="dropdown">
+                                Last
+                            </button>
+                            <ul class="dropdown-menu dropdown-menu-dark">
+                                <li><a class="dropdown-item small" href="#" onclick="setSlTriggerSource('Bid')">Bid</a>
+                                </li>
+                                <li><a class="dropdown-item small" href="#" onclick="setSlTriggerSource('Ask')">Ask</a>
+                                </li>
+                                <li><a class="dropdown-item small" href="#"
+                                        onclick="setSlTriggerSource('Last')">Last</a></li>
+                            </ul>
+                        </div>
+                        <input type="number" id="stopLossPrice" placeholder="0.00" class="flex-grow-1">
+                        <span class="unit-text small text-secondary me-2" id="sl-price-asset-label">USDC</span>
+                        <span class="pct-badge-internal negative" id="sl-pct-badge">-5.00%</span>
+                    </div>
+                </div>
+
+                <!-- Order Price (only for Limit) -->
+                <div class="mb-3" id="sl-order-price-group">
+                    <label class="small text-secondary mb-1" id="label-sl_order_price">Order price</label>
+                    <div class="input-group-3commas" id="sl-order-price-container">
+                        <input type="number" id="slOrderPrice" placeholder="0.00" class="flex-grow-1">
+                        <span class="unit-text small text-secondary me-2" id="sl-order-price-asset-label">USDC</span>
+                        <span class="pct-badge-internal negative" id="sl-order-pct-badge">-5.00%</span>
+                    </div>
+                    <div class="small text-danger mt-1 d-none" id="sl-min-req-error">
+                        <i class="bi bi-x-circle-fill me-1"></i> Amount is too small to make an order
+                    </div>
+                </div>
+
+                <!-- SL Timeout -->
+                <div class="mb-3">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <span class="small fw-bold" id="label-sl_timeout">Stop Loss timeout <i
+                                class="bi bi-question-circle text-secondary"></i></span>
+                        <label class="switch-toggle">
+                            <input type="checkbox" id="slTimeoutToggle">
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+                    <div class="adjustment-group d-none" id="sl-timeout-controls">
+                        <button class="adjustment-btn" id="slTimeoutMinus">-</button>
+                        <input type="number" class="adjustment-input" id="slTimeoutDuration" value="300">
+                        <button class="adjustment-btn" id="slTimeoutPlus">+</button>
+                        <span class="p-2 small text-secondary">Sec</span>
+                    </div>
+                </div>
+
+                <!-- Trailing SL -->
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <span class="small fw-bold" id="label-trailing_sl">Trailing Stop Loss <i
+                            class="bi bi-question-circle text-secondary"></i></span>
+                    <label class="switch-toggle">
+                        <input type="checkbox" id="trailingSlToggle">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+
+                <!-- Move to Breakeven -->
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <span class="small fw-bold" id="label-move_to_breakeven">Move to Breakeven <i
+                            class="bi bi-question-circle text-secondary"></i></span>
+                    <label class="switch-toggle">
+                        <input type="checkbox" id="moveToBreakevenToggle">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bottom Section: Positions & Logs -->
+    <div class="px-3 pb-3">
+        <div class="pillar">
+            <div class="pillar-tabs mb-0">
+                <div class="pillar-tab active" data-tab-target="#positionTab" id="label-positions_header">Positions
+                </div>
+                <div class="pillar-tab" data-tab-target="#logTab" id="label-logs_header">Console Log</div>
+            </div>
+            <div class="tab-content pillar-content p-0">
+                <div class="tab-pane-custom active" id="positionTab">
+                    <div class="table-responsive">
+                        <table class="table table-hover table-dark align-middle mb-0 small">
+                            <thead>
+                                <tr class="text-secondary border-0">
+                                    <th id="label-th_acc">Acc</th>
+                                    <th id="label-th_symbol">Symbol</th>
+                                    <th id="label-th_size">Size</th>
+                                    <th id="label-th_entry">Entry</th>
+                                    <th id="label-th_pnl">PNL</th>
+                                    <th id="label-th_action">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="positionsTableBody">
+                                <!-- Populated by JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="tab-pane-custom d-none" id="logTab">
+                    <div class="console-output rounded overflow-auto p-2" id="consoleOutput"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Settings Modal -->
+    <div class="modal fade" id="settingsModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content bg-dark text-light border-secondary">
+                <div class="modal-header border-secondary">
+                    <h5 class="modal-title" id="label-settings_title">Settings</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-4">
+                        <h6 id="label-settings_global_strategy">Global Strategy Settings</h6>
+
+                        <!-- Leverage -->
+                        <div class="row align-items-center mb-2">
+                            <div class="col-6">
+                                <label class="small text-secondary" id="label-settings_default_leverage">Default
+                                    Leverage (Applied to all symbols)</label>
+                            </div>
+                            <div class="col-6">
+                                <div class="input-group input-group-sm">
+                                    <input type="number" class="form-control bg-dark text-light border-secondary"
+                                        id="globalLeverageInput" value="20" min="1" max="125">
+                                    <span class="input-group-text bg-dark text-secondary border-secondary">x</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Direction -->
+                        <div class="row align-items-center mb-2">
+                            <div class="col-6">
+                                <label class="small text-secondary" id="label-settings_direction">Direction
+                                    (Long/Short)</label>
+                            </div>
+                            <div class="col-6">
+                                <select class="form-select form-select-sm bg-dark text-light border-secondary"
+                                    id="globalDirectionSelect">
+                                    <option value="LONG">LONG</option>
+                                    <option value="SHORT">SHORT</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- Margin Mode -->
+                        <div class="row align-items-center mb-2">
+                            <div class="col-6">
+                                <label class="small text-secondary" id="label-settings_margin_mode">Margin Mode
+                                    (Crossed/Isolated)</label>
+                            </div>
+                            <div class="col-6">
+                                <select class="form-select form-select-sm bg-dark text-light border-secondary"
+                                    id="globalMarginModeSelect">
+                                    <option value="CROSSED">CROSSED</option>
+                                    <option value="ISOLATED">ISOLATED</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mb-4">
+                        <h6 id="label-settings_trading_mode">Trading Mode</h6>
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="demoModeToggle">
+                            <label class="form-check-label" for="demoModeToggle" id="label-settings_demo_mode">Demo Mode
+                                (Paper Trading)</label>
+                        </div>
+                    </div>
+
+                    <div class="mb-4">
+                        <h6 id="label-settings_api_accounts">API Accounts</h6>
+                        <div id="api-accounts-settings">
+                            <!-- Populated by JS -->
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <h6 id="label-settings_symbol_mgmt">Symbol Management</h6>
+                        <div class="d-flex gap-2 mb-2">
+                            <input type="text" class="form-control form-control-sm bg-dark text-light border-secondary"
+                                id="newSymbolInput" placeholder="Add Symbol (e.g. BTCUSDC)">
+                            <button class="btn btn-sm btn-accent" id="addNewSymbolBtn"><span
+                                    id="label-settings_add_btn">Add</span></button>
+                        </div>
+                        <div id="symbols-list" class="d-flex flex-wrap gap-2">
+                            <!-- Populated by JS -->
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer border-secondary">
+                    <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal"
+                        id="label-settings_close_btn">Close</button>
+                    <button type="button" class="btn btn-sm btn-accent" id="saveSettingsBtn"><span
+                            id="label-settings_save_btn">Save Changes</span></button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="translations-data" class="d-none">{{ translations | tojson }}</div>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+
+</html>
