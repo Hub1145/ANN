@@ -371,6 +371,7 @@ class BinanceTradingBotEngine:
                         try:
                             twm.start()
                             time.sleep(0.1)
+                            logging.info(f"Starting futures user socket for {acc.get('name')} (Testnet: {testnet})")
                             twm.start_futures_user_socket(callback=lambda msg, idx=i: self._handle_user_data(idx, msg))
                         except Exception as e:
                             logging.error(f"Failed to start background WebSocket for {acc.get('name')}: {e}")
@@ -425,10 +426,14 @@ class BinanceTradingBotEngine:
             else:
                 client.FUTURES_URL = 'https://fapi.binance.com/fapi'
                 client.FUTURES_DATA_URL = 'https://fapi.binance.com/fapi'
-            self._safe_api_call(client.futures_account_balance)
+            
+            # Check balance to verify API key
+            client.futures_account_balance()
             return True, "Connection successful"
+        except BinanceAPIException as e:
+            return False, f"Binance Error: {e.message} (Code: {e.code})"
         except Exception as e:
-            return False, str(e)
+            return False, f"Connection failed: {str(e)}"
 
     def _init_account(self, i, acc):
         try:
