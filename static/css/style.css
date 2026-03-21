@@ -55,6 +55,15 @@ body {
     flex-wrap: wrap;
 }
 
+.bi-question-circle {
+    cursor: pointer;
+    transition: color 0.2s ease;
+}
+
+.bi-question-circle:hover {
+    color: var(--accent-color) !important;
+}
+
 .pillar {
     flex: 1;
     min-width: 320px;

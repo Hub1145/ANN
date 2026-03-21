@@ -17,6 +17,25 @@ document.addEventListener('DOMContentLoaded', () => {
     setupEventListeners();
     setupSocketListeners();
     
+    // Set initial content then initialize popovers
+    updateHelpTooltips();
+    const popoverTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="popover"]'));
+    popoverTriggerList.map(function (popoverTriggerEl) {
+        const popover = new bootstrap.Popover(popoverTriggerEl, {
+            trigger: 'click',
+            placement: 'top',
+            container: 'body',
+            html: true
+        });
+
+        popoverTriggerEl.addEventListener('shown.bs.popover', () => {
+            setTimeout(() => {
+                popover.hide();
+            }, 5000);
+        });
+        return popover;
+    });
+    
     function updatePerformanceMetrics() {
     if (!activeSymbol || !currentConfig) return;
     const strat = currentConfig.symbol_strategies[activeSymbol] || {};
@@ -525,6 +544,30 @@ function setupEventListeners() {
     });
 
 
+    if (document.getElementById('btnAddTrade')) {
+        document.getElementById('btnAddTrade').addEventListener('click', () => {
+            if (!activeSymbol || !currentConfig) return;
+            const strat = currentConfig.symbol_strategies[activeSymbol];
+            if (!strat) return;
+
+            const btn = document.getElementById('btnAddTrade');
+            const oldHtml = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Adding...';
+
+            socket.emit('start_add_trade', {
+                account_idx: activeAccountIdx,
+                symbol: activeSymbol,
+                settings: strat
+            });
+
+            setTimeout(() => {
+                btn.disabled = false;
+                btn.innerHTML = oldHtml;
+            }, 2000);
+        });
+    }
+
     // Custom Bottom Tabs
     document.querySelectorAll('[data-tab-target]').forEach(tab => {
         tab.addEventListener('click', () => {
@@ -608,6 +651,31 @@ function applyUiTranslations() {
             if (elInp) elInp.placeholder = text;
         }
     }
+    updateHelpTooltips();
+}
+
+function updateHelpTooltips() {
+    const ui = (allTranslations[currentLang] || {}).ui || {};
+    const helpIcons = [
+        'use_existing', 'trailing_buy', 'consolidated_reentry', 
+        'entry_grid', 'consolidated_tp', 'trailing_tp', 
+        'sl_timeout', 'trailing_sl', 'move_to_breakeven'
+    ];
+
+    helpIcons.forEach(id => {
+        const el = document.getElementById(`help-${id}`);
+        if (el) {
+            const content = ui[`help_${id}`] || '';
+            el.setAttribute('data-bs-content', content);
+            el.setAttribute('data-bs-original-title', ui.settings_title || 'Info'); // Optional title
+            const popover = bootstrap.Popover.getInstance(el);
+            if (popover) {
+                popover.setContent({
+                    '.popover-body': content
+                });
+            }
+        }
+    });
 }
 
 function updateUIFromConfig() {
@@ -926,16 +994,38 @@ function setupSocketListeners() {
         if (totalEquityVal) totalEquityVal.innerText = `$${currentBalance.toFixed(2)}`;
 
         const posTable = document.getElementById('positionsTableBody');
-        posTable.innerHTML = (data.positions || []).map(p => `
-            <tr class="border-0">
-                <td>${p.account}</td>
-                <td>${p.symbol}</td>
-                <td class="${p.amount > 0 ? 'text-success' : 'text-danger'}">${p.amount}</td>
-                <td>${(parseFloat(p.entryPrice) || 0).toFixed(2)}</td>
-                <td class="${p.unrealizedProfit >= 0 ? 'text-success' : 'text-danger'}">${(parseFloat(p.unrealizedProfit) || 0).toFixed(2)}</td>
-                <td><button class="btn btn-xs btn-outline-danger py-0" onclick="closePosition(${p.account_idx}, '${p.symbol}')">Kill</button></td>
-            </tr>
-        `).join('');
+        let rows = [];
+        (data.positions || []).forEach(p => {
+            if (p.trades && p.trades.length > 0) {
+                p.trades.forEach(t => {
+                    rows.push(`
+                        <tr class="border-0">
+                            <td>${p.account}</td>
+                            <td>${p.symbol} <span class="badge bg-secondary smaller">${t.trade_id}</span></td>
+                            <td class="${p.amount > 0 ? 'text-success' : 'text-danger'}">${t.amount || p.amount}</td>
+                            <td>${(parseFloat(t.entry_price || p.entryPrice) || 0).toFixed(2)}</td>
+                            <td class="${p.unrealizedProfit >= 0 ? 'text-success' : 'text-danger'}">${(parseFloat(p.unrealizedProfit) || 0).toFixed(2)}</td>
+                            <td><button class="btn btn-xs btn-outline-danger py-0" onclick="closePosition(${p.account_idx}, '${p.symbol}', '${t.trade_id}')">Kill</button></td>
+                        </tr>
+                    `);
+                });
+            } else {
+                // External or untracked position
+                rows.push(`
+                    <tr class="border-0">
+                        <td>${p.account}</td>
+                        <td>${p.symbol} <span class="badge bg-warning text-dark smaller">External</span></td>
+                        <td class="${p.amount > 0 ? 'text-success' : 'text-danger'}">${p.amount}</td>
+                        <td>${(parseFloat(p.entryPrice) || 0).toFixed(2)}</td>
+                        <td class="${p.unrealizedProfit >= 0 ? 'text-success' : 'text-danger'}">${(parseFloat(p.unrealizedProfit) || 0).toFixed(2)}</td>
+                        <td><button class="btn btn-xs btn-outline-danger py-0" onclick="closePosition(${p.account_idx}, '${p.symbol}')">Kill</button></td>
+                    </tr>
+                `);
+            }
+        });
+        posTable.innerHTML = rows.join('');
+
+        renderOpenOrders(data.open_orders || []);
     });
 
     socket.on('console_log', (data) => {
@@ -950,12 +1040,30 @@ function setupSocketListeners() {
     });
 
     socket.on('config_data', (data) => {
+        const prevSymbol = activeSymbol; // remember current selection
         currentConfig = data;
-        initSymbolPicker();
         currentLang = currentConfig.language || 'en-US';
         document.getElementById('lang-select').value = currentLang;
         applyUiTranslations();
-        updateUIFromConfig();
+        
+        // Rebuild picker but attempt to preserve selection
+        const select = document.getElementById('selectActiveSymbol');
+        select.innerHTML = currentConfig.symbols.map(s => `<option value="${s}">${s}</option>`).join('');
+        
+        if (prevSymbol && currentConfig.symbols.includes(prevSymbol)) {
+            activeSymbol = prevSymbol;
+            select.value = prevSymbol;
+        } else if (currentConfig.symbols.length > 0) {
+            activeSymbol = currentConfig.symbols[0];
+            select.value = activeSymbol;
+        }
+
+        // Only update full UI if we didn't have a stable selection or it's a first load
+        // But we actually need to update fields to match config.
+        // To avoid "reverting" while user is typing, we could check document.activeElement
+        if (!document.activeElement || !document.activeElement.id || !['inputTradeAmountUSDC', 'inputEntryPrice', 'tpVolumeSlider', 'inputTpPercent', 'inputTpVolume', 'stopLossPrice'].includes(document.activeElement.id)) {
+            updateUIFromConfig();
+        }
     });
 
     socket.on('test_api_result', (data) => {
@@ -1090,7 +1198,44 @@ window.testApiKey = (i) => {
     window.addEventListener('test_api_finished', finishHandler);
 };
 
-window.closePosition = (account_idx, symbol) => { socket.emit('close_trade', { account_idx, symbol }); };
+window.closePosition = (account_idx, symbol, trade_id = null) => { socket.emit('close_trade', { account_idx, symbol, trade_id }); };
+
+window.cancelOrder = (account_idx, symbol, order_id) => { socket.emit('cancel_order', { account_idx, symbol, order_id }); };
+window.refreshData = () => { socket.emit('refresh_data'); };
+
+function renderOpenOrders(orders) {
+    const tableBody = document.getElementById('openOrdersTableBody');
+    if (!tableBody) return;
+
+    const ui = (allTranslations[currentLang] || {}).ui || {};
+
+    let rows = [];
+    orders.forEach(o => {
+        const sideClass = o.side === 'BUY' ? 'text-success' : 'text-danger';
+        rows.push(`
+            <tr class="border-0">
+                <td>${o.account}</td>
+                <td>${o.symbol}</td>
+                <td class="${sideClass} fw-bold">${o.side}</td>
+                <td>${o.type}</td>
+                <td>${o.qty}</td>
+                <td>${parseFloat(o.price).toFixed(2)}</td>
+                <td>
+                    <button class="btn btn-xs btn-outline-warning py-0" 
+                            onclick="cancelOrder(${o.account_idx}, '${o.symbol}', '${o.orderId}')">
+                        ${ui.cancel_btn || 'Cancel'}
+                    </button>
+                </td>
+            </tr>
+        `);
+    });
+
+    if (rows.length === 0) {
+        tableBody.innerHTML = `<tr><td colspan="7" class="text-center text-secondary small py-3">${ui.no_open_orders || 'No open orders'}</td></tr>`;
+    } else {
+        tableBody.innerHTML = rows.join('');
+    }
+}
 
 window.setActiveAccount = (idx) => {
     activeAccountIdx = idx;

@@ -164,17 +164,41 @@ def handle_test_api_key(data):
     except Exception as e:
         emit('test_api_result', {'success': False, 'message': str(e)})
 
+@socketio.on('start_add_trade')
+def handle_start_add_trade(data):
+    if bot_engine:
+        account_idx = data.get('account_idx')
+        symbol = data.get('symbol')
+        settings = data.get('settings')
+        if account_idx is not None and symbol:
+            bot_engine.start_add_trade(account_idx, symbol, settings)
+
 @socketio.on('close_trade')
 def handle_close_trade(data):
     if bot_engine:
         account_idx = data.get('account_idx')
         symbol = data.get('symbol')
+        trade_id = data.get('trade_id')
         if account_idx is not None and symbol:
-            bot_engine.close_position(account_idx, symbol)
+            bot_engine.close_position(account_idx, symbol, trade_id=trade_id)
+
+@socketio.on('cancel_order')
+def handle_cancel_order(data):
+    if bot_engine:
+        account_idx = data.get('account_idx')
+        symbol = data.get('symbol')
+        order_id = data.get('order_id')
+        if account_idx is not None and symbol and order_id:
+            bot_engine.cancel_order(account_idx, symbol, order_id)
+
+@socketio.on('refresh_data')
+def handle_refresh_data():
+    if bot_engine:
+        bot_engine.refresh_data()
 
 if __name__ == '__main__':
     if not bot_engine:
         bot_engine = BinanceTradingBotEngine(config_file, emit_to_client, server_ip=server_ip)
 
     port = 3000
-    socketio.run(app, host='0.0.0.0', port=port, debug=False, use_reloader=False, allow_unsafe_werkzeug=True)
+    socketio.run(app, host='0.0.0.0', port=port, debug=False, use_reloader=False)

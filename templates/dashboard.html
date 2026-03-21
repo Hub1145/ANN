@@ -65,7 +65,7 @@
 
                 <div class="d-flex justify-content-between align-items-center mb-3">
                     <span class="small" id="label-use_existing">Use Existing Assets <i
-                            class="bi bi-question-circle text-secondary"></i></span>
+                            class="bi bi-question-circle text-secondary" id="help-use_existing" data-bs-toggle="popover"></i></span>
                     <label class="switch-toggle">
                         <input type="checkbox" id="useExistingToggle">
                         <span class="slider"></span>
@@ -127,7 +127,7 @@
 
                     <div class="d-flex justify-content-between align-items-center mb-1">
                         <span class="small" id="label-trailing_buy">Trailing Buy <i
-                                class="bi bi-question-circle text-secondary"></i></span>
+                                class="bi bi-question-circle text-secondary" id="help-trailing_buy" data-bs-toggle="popover"></i></span>
                         <label class="switch-toggle">
                             <input type="checkbox" id="trailingBuyToggle">
                             <span class="slider"></span>
@@ -142,8 +142,7 @@
 
                     <div class="d-flex justify-content-between align-items-center mb-1">
                         <span class="small" id="label-consolidated_reentry">Consolidated Re-entry <i
-                                class="bi bi-question-circle text-secondary" id="help-consolidated_reentry"
-                                title=""></i></span>
+                                 class="bi bi-question-circle text-secondary" id="help-consolidated_reentry" data-bs-toggle="popover"></i></span>
                         <label class="switch-toggle">
                             <input type="checkbox" id="consolidatedReentryToggle">
                             <span class="slider"></span>
@@ -161,7 +160,7 @@
 
                     <div class="separator my-2"></div>
                     <div class="d-flex justify-content-between align-items-center mb-1">
-                        <span class="small fw-bold" id="label-entry_grid">Entry Grid (DCA) <i class="bi bi-question-circle text-secondary"></i></span>
+                        <span class="small fw-bold" id="label-entry_grid">Entry Grid (DCA) <i class="bi bi-question-circle text-secondary" id="help-entry_grid" data-bs-toggle="popover"></i></span>
                         <label class="switch-toggle">
                             <input type="checkbox" id="entryGridToggle">
                             <span class="slider"></span>
@@ -292,7 +291,7 @@
 
                 <div class="d-flex justify-content-between align-items-center mb-2">
                     <span class="small fw-bold" id="label-trailing_tp_last">Trailing Take Profit for last target <i
-                            class="bi bi-question-circle text-secondary"></i></span>
+                            class="bi bi-question-circle text-secondary" id="help-trailing_tp" data-bs-toggle="popover"></i></span>
                     <label class="switch-toggle">
                         <input type="checkbox" id="trailingTpToggle">
                         <span class="slider"></span>
@@ -312,7 +311,7 @@
                 <div class="separator mt-3 mb-2"></div>
                 <div class="d-flex justify-content-between align-items-center mb-1">
                     <span class="small fw-bold" id="label-consolidated_tp">Aggregated Take Profit (Option A) <i
-                            class="bi bi-question-circle text-secondary" id="help-consolidated_tp" title=""></i></span>
+                            class="bi bi-question-circle text-secondary" id="help-consolidated_tp" data-bs-toggle="popover"></i></span>
                     <label class="switch-toggle">
                         <input type="checkbox" id="consolidatedTpToggle">
                         <span class="slider"></span>
@@ -386,7 +385,7 @@
                 <div class="mb-3">
                     <div class="d-flex justify-content-between align-items-center mb-2">
                         <span class="small fw-bold" id="label-sl_timeout">Stop Loss timeout <i
-                                class="bi bi-question-circle text-secondary"></i></span>
+                                class="bi bi-question-circle text-secondary" id="help-sl_timeout" data-bs-toggle="popover"></i></span>
                         <label class="switch-toggle">
                             <input type="checkbox" id="slTimeoutToggle">
                             <span class="slider"></span>
@@ -403,7 +402,7 @@
                 <!-- Trailing SL -->
                 <div class="d-flex justify-content-between align-items-center mb-3">
                     <span class="small fw-bold" id="label-trailing_sl">Trailing Stop Loss <i
-                            class="bi bi-question-circle text-secondary"></i></span>
+                            class="bi bi-question-circle text-secondary" id="help-trailing_sl" data-bs-toggle="popover"></i></span>
                     <label class="switch-toggle">
                         <input type="checkbox" id="trailingSlToggle">
                         <span class="slider"></span>
@@ -413,12 +412,26 @@
                 <!-- Move to Breakeven -->
                 <div class="d-flex justify-content-between align-items-center mb-3">
                     <span class="small fw-bold" id="label-move_to_breakeven">Move to Breakeven <i
-                            class="bi bi-question-circle text-secondary"></i></span>
+                            class="bi bi-question-circle text-secondary" id="help-move_to_breakeven" data-bs-toggle="popover"></i></span>
                     <label class="switch-toggle">
                         <input type="checkbox" id="moveToBreakevenToggle">
                         <span class="slider"></span>
                     </label>
                 </div>
+
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Trade Action Area -->
+    <div class="px-3 mb-3">
+        <div class="pillar p-3 d-grid bg-dark border-secondary">
+            <button class="btn btn-accent btn-lg fw-bold d-flex align-items-center justify-content-center gap-2" id="btnAddTrade">
+                <i class="bi bi-plus-circle-fill fs-4"></i>
+                <span id="label-add_trade_btn">Add New Trade</span>
+            </button>
+            <div class="small text-secondary text-center mt-2" id="label-add_trade_note">
+                Starts a new independent trade with current settings
             </div>
         </div>
     </div>
@@ -429,6 +442,7 @@
             <div class="pillar-tabs mb-0">
                 <div class="pillar-tab active" data-tab-target="#positionTab" id="label-positions_header">Positions
                 </div>
+                <div class="pillar-tab" data-tab-target="#openOrdersTab" id="label-open_orders_header">Open Orders</div>
                 <div class="pillar-tab" data-tab-target="#logTab" id="label-logs_header">Console Log</div>
             </div>
             <div class="tab-content pillar-content p-0">
@@ -446,6 +460,32 @@
                                 </tr>
                             </thead>
                             <tbody id="positionsTableBody">
+                                <!-- Populated by JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="tab-pane-custom d-none" id="openOrdersTab">
+                    <div class="d-flex justify-content-end p-2 border-bottom border-secondary">
+                        <button class="btn btn-xs btn-outline-info d-flex align-items-center gap-1" onclick="refreshData()">
+                            <i class="bi bi-arrow-clockwise"></i>
+                            <span class="x-small">Refresh</span>
+                        </button>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-hover table-dark align-middle mb-0 small">
+                            <thead>
+                                <tr class="text-secondary border-0">
+                                    <th id="label-th_orders_acc">Acc</th>
+                                    <th id="label-th_orders_symbol">Symbol</th>
+                                    <th id="label-th_orders_side">Side</th>
+                                    <th id="label-th_orders_type">Type</th>
+                                    <th id="label-th_orders_qty">Qty</th>
+                                    <th id="label-th_orders_price">Price</th>
+                                    <th id="label-th_orders_action">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="openOrdersTableBody">
                                 <!-- Populated by JS -->
                             </tbody>
                         </table>
