@@ -22,7 +22,7 @@ class BinanceTradingBotEngine:
         self.language = self.config.get('language', 'pt-BR')
 
         # Locks must be initialized before calling any methods that use them
-        self.data_lock = threading.Lock()
+        self.data_lock = threading.RLock()
         self.twm_lock = threading.Lock()
         self.market_data_lock = threading.Lock()
         self.config_update_lock = threading.Lock()
@@ -637,6 +637,8 @@ class BinanceTradingBotEngine:
                 # Trade already active/pending, worker doesn't need to do more for entry
                 return
 
+        use_existing = strategy.get('use_existing_assets', strategy.get('use_existing', False))
+
         if use_existing and has_pos:
             # Force grid placement if not already placed
             setup_tp_args = None
@@ -654,7 +656,7 @@ class BinanceTradingBotEngine:
             if use_existing:
                 # We only skip if it's the main automated task (id='manual'). 
                 # Explicit 'Add Trade' (id starts with 'man-') should proceed.
-                if (idx, symbol) in self.open_positions and symbol in self.open_positions[idx] and trade_id == 'manual':
+                if idx in self.open_positions and symbol in self.open_positions[idx] and trade_id == 'manual':
                     self.log("pos_exists_skip", account_name=acc['info'].get('name'), is_key=True, symbol=symbol)
                     return
 # Only place TP grid if tp_enabled
@@ -1071,7 +1073,7 @@ class BinanceTradingBotEngine:
                         dev = 0.6
                         tp_targets = [{'percent': (i + 1) * dev, 'volume': 12.5} for i in range(8)]
                     
-                    trailing_enabled = strategy.get('trailing_enabled', False)
+                    trailing_enabled = strategy.get('trailing_tp_enabled', strategy.get('trailing_enabled', False))
                     setup_tp_args = (idx, symbol, weighted_avg, tp_targets, total_filled_qty, direction, trailing_enabled, current_trade_id)
 
             # 2. Check levels for TP fills
@@ -2273,20 +2275,6 @@ class BinanceTradingBotEngine:
                 if (idx, symbol) in self.grid_state:
                     self.grid_state[(idx, symbol)] = [t for t in self.grid_state[(idx, symbol)] if t.get('trade_id') != trade_id]
 
-    def _execute_market_close_partial(self, idx, symbol, quantity, side):
-        """Executes a partial market close for a specific trade."""
-        try:
-            target_client = self.accounts[idx]['client']
-            self._safe_api_call(target_client.futures_create_order,
-                symbol=symbol,
-                side=side,
-                type=Client.FUTURE_ORDER_TYPE_MARKET,
-                quantity=self._format_quantity(symbol, quantity)
-            )
-            self.log(f"Market close partial for {symbol} - Qty: {quantity}", account_name=self.accounts[idx]['info'].get('name'), is_key=True)
-        except Exception as e:
-            self.log(f"Market close partial failed for {symbol}: {e}", level='error', account_name=self.accounts[idx]['info'].get('name'))
-
     def _tp_market_logic(self, idx, symbol):
         """Monitors price for manual market TP execution."""
         with self.market_data_lock:
@@ -2340,13 +2328,14 @@ class BinanceTradingBotEngine:
 
     def _execute_market_close_partial(self, idx, symbol, qty, side):
         """Executes a market order to close part of a position."""
+        if idx not in self.accounts: return False
         acc = self.accounts[idx]
         client = acc['client']
         try:
             qty_str = self._format_quantity(symbol, qty)
             f_qty = float(qty_str)
             if f_qty <= 0:
-                self.log(f"Market TP skipped for {symbol}: Quantity {f_qty} <= 0.", level='warning', account_name=acc['info'].get('name'))
+                self.log(f"Market order skipped for {symbol}: Quantity {f_qty} <= 0.", level='warning', account_name=acc['info'].get('name'))
                 return True # Mark as "handled" to stop the loop
 
             # Notional check
@@ -2364,18 +2353,19 @@ class BinanceTradingBotEngine:
                                 min_notional = float(f.get('notional') or f.get('minNotional') or 5.0)
                                 break
                 if notional < min_notional:
-                    self.log(f"Market TP skipped for {symbol}: Notional {notional:.2f} < Min {min_notional}.", level='warning', account_name=acc['info'].get('name'))
+                    self.log(f"Market order skipped for {symbol}: Notional {notional:.2f} < Min {min_notional}.", level='warning', account_name=acc['info'].get('name'))
                     return True # Mark as "handled" to stop the loop
 
             self._safe_api_call(client.futures_create_order,
                 symbol=symbol,
                 side=side,
-                type=Client.ORDER_TYPE_MARKET,
+                type=Client.FUTURE_ORDER_TYPE_MARKET,
                 quantity=qty_str
             )
+            self.log(f"Market close partial for {symbol} - Qty: {qty_str}", account_name=acc['info'].get('name'), is_key=True)
             return True
         except Exception as e:
-            self.log("tp_market_failed", level='error', account_name=self.accounts[idx]['info'].get('name'), is_key=True, error=str(e))
+            self.log("market_close_failed", level='error', account_name=self.accounts[idx]['info'].get('name'), is_key=True, error=str(e))
             return False
 
     def _stop_loss_logic(self, idx, symbol):
@@ -2470,16 +2460,7 @@ class BinanceTradingBotEngine:
                         self.log("sl_timeout_reset", account_name=acc_name, is_key=False)
 
         for tid in to_close:
-            self.close_position(acc_name, symbol) # Wait, close_position currently closes WHOLE symbol.
-            # I should update close_position to handle trade-specific closing if needed,
-            # but usually SL/TP for one trade might mean closing the whole position if it's the only one.
-            # If we have multiple positions, closing one means reducing the position size.
-            # For now, I'll keep close_position as whole symbol close but eventually I might need partial close.
-            # Actually, close_position finds the total amt and closes it.
-            # If we want multi-trade, SL/TP for ONE trade should correctly calculate how much to close.
-            
-            # Let's fix close_position later. For now, multiple trades on same symbol will likely share the same SL trigger if they share strategy.
-            pass
+            self.close_position(acc_name, symbol, trade_id=tid)
 
     def _trailing_tp_logic(self, idx, symbol):
         strategy = self._get_strategy(idx, symbol)
