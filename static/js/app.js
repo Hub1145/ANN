@@ -36,65 +36,6 @@ document.addEventListener('DOMContentLoaded', () => {
         return popover;
     });
     
-    function updatePerformanceMetrics() {
-    if (!activeSymbol || !currentConfig) return;
-    const strat = currentConfig.symbol_strategies[activeSymbol] || {};
-    
-    const entryPrice = parseFloat(document.getElementById('inputEntryPrice').value) || parseFloat(document.getElementById('bid-price').innerText) || 0;
-    const slPrice = parseFloat(document.getElementById('stopLossPrice').value) || 0;
-    const leverage = strat.leverage || 20;
-    const amountUSDC = parseFloat(document.getElementById('inputTradeAmountUSDC').value) || 0;
-    const direction = strat.direction || 'LONG';
-    
-    // 1. Calculate Est. SL PnL
-    let slPnL = 0;
-    if (entryPrice > 0 && slPrice > 0 && amountUSDC > 0) {
-        const qty = (amountUSDC * leverage) / entryPrice;
-        slPnL = (slPrice - entryPrice) * qty;
-        if (direction === 'SHORT') slPnL = -slPnL;
-    }
-    const slEl = document.getElementById('est-sl-pnl');
-    if (slEl) {
-        slEl.innerText = `${slPnL >= 0 ? '+' : ''}${slPnL.toFixed(2)} USDC`;
-        slEl.classList.toggle('text-success', slPnL > 0);
-        slEl.classList.toggle('text-danger', slPnL < 0);
-    }
-
-    // 2. Calculate Est. TP PnL (weighted average of targets)
-    let tpPnL = 0;
-    const targets = strat.tp_targets || [];
-    if (entryPrice > 0 && amountUSDC > 0 && targets.length > 0) {
-        const totalQty = (amountUSDC * leverage) / entryPrice;
-        targets.forEach(t => {
-            const pct = (t.percent || 0) / 100;
-            const vol = (t.volume || 0) / 100;
-            const targetPrice = direction === 'LONG' ? entryPrice * (1 + pct) : entryPrice * (1 - pct);
-            const targetQty = totalQty * vol;
-            let profit = (targetPrice - entryPrice) * targetQty;
-            if (direction === 'SHORT') profit = -profit;
-            tpPnL += profit;
-        });
-    }
-    const tpEl = document.getElementById('est-tp-pnl');
-    if (tpEl) {
-        tpEl.innerText = `${tpPnL >= 0 ? '+' : ''}${tpPnL.toFixed(2)} USDC`;
-        tpEl.classList.toggle('text-success', tpPnL > 0);
-        tpEl.classList.toggle('text-danger', tpPnL < 0);
-    }
-
-    // 3. Calculate Risk/Reward
-    let rr = 0;
-    const risk = Math.abs(slPnL);
-    if (risk > 0) {
-        rr = tpPnL / risk;
-    }
-    const rrEl = document.getElementById('rr-ratio');
-    if (rrEl) {
-        rrEl.innerText = rr > 0 ? rr.toFixed(2) : '0.00';
-        rrEl.classList.toggle('text-success', rr >= 2);
-        rrEl.classList.toggle('text-warning', rr > 0 && rr < 2);
-    }
-}
 
 // Ensure metrics are updated on initial load and price updates
 socket.on('price_update', (data) => {
@@ -1058,6 +999,12 @@ function setupSocketListeners() {
             select.value = activeSymbol;
         }
 
+        // Skip full UI refresh if modal is open to avoid layout jumps
+        const modalEl = document.getElementById('settingsModal');
+        if (modalEl && (modalEl.classList.contains('show') || document.body.classList.contains('modal-open'))) {
+            return;
+        }
+
         // Only update full UI if we didn't have a stable selection or it's a first load
         // But we actually need to update fields to match config.
         // To avoid "reverting" while user is typing, we could check document.activeElement
@@ -1302,48 +1249,67 @@ function renderTpTargets() {
 function updatePerformanceMetrics() {
     if (!activeSymbol || !currentConfig) return;
     const strat = currentConfig.symbol_strategies[activeSymbol] || {};
-    const entryPrice = parseFloat(document.getElementById('inputEntryPrice').value) || 0;
-    const tradeAmountUSDC = parseFloat(document.getElementById('inputTradeAmountUSDC').value) || 0;
+
+    const entryPriceInput = document.getElementById('inputEntryPrice');
+    const bidPriceEl = document.getElementById('bid-price');
+    const entryPrice = parseFloat(entryPriceInput.value) || (bidPriceEl ? parseFloat(bidPriceEl.innerText) : 0) || 0;
+
+    const slPriceInput = document.getElementById('stopLossPrice');
+    const slPrice = slPriceInput ? parseFloat(slPriceInput.value) : 0;
+
+    const amountInput = document.getElementById('inputTradeAmountUSDC');
+    const amountUSDC = amountInput ? parseFloat(amountInput.value) : 0;
+
     const leverage = strat.leverage || 20;
     const direction = strat.direction || 'LONG';
-    const totalNotional = tradeAmountUSDC * leverage;
-
-    if (!entryPrice || !tradeAmountUSDC) return;
+    const totalNotional = amountUSDC * leverage;
 
     const multiplier = (direction === 'SHORT') ? -1 : 1;
 
-    // 1. Calculate SL Risk
-    const slPrice = strat.stop_loss_price || 0;
-    let slRiskUSDC = 0;
-    if (slPrice > 0) {
+    // 1. Calculate Est. SL PnL
+    let slPnL = 0;
+    if (entryPrice > 0 && slPrice > 0 && amountUSDC > 0) {
         const diffP = ((slPrice - entryPrice) / entryPrice) * multiplier;
-        slRiskUSDC = Math.abs(diffP * totalNotional);
+        slPnL = diffP * totalNotional;
+    }
+    const slEl = document.getElementById('est-sl-pnl');
+    if (slEl) {
+        slEl.innerText = `${slPnL >= 0 ? '+' : ''}${slPnL.toFixed(2)} USDC`;
+        slEl.classList.toggle('text-success', slPnL > 0);
+        slEl.classList.toggle('text-danger', slPnL < 0);
     }
 
-    // 2. Calculate TP Reward (Weighted Average)
-    let totalRewardUSDC = 0;
+    // 2. Calculate Est. TP PnL (weighted average of targets)
+    let tpPnL = 0;
     const targets = strat.tp_targets || [];
-    targets.forEach(t => {
-        const tpPct = (parseFloat(t.percent) / 100);
-        const tpVol = (parseFloat(t.volume) / 100);
-        totalRewardUSDC += (tpPct * totalNotional * tpVol);
-    });
-
-    // 3. Update R/R Ratio UI
-    const rrValueEl = document.getElementById('rr-ratio-value');
-    if (rrValueEl) {
-        if (slRiskUSDC > 0) {
-            const rr = totalRewardUSDC / slRiskUSDC;
-            rrValueEl.innerText = `1 : ${rr.toFixed(2)}`;
-            rrValueEl.classList.remove('text-danger');
-            rrValueEl.classList.add('text-success');
-        } else {
-            rrValueEl.innerText = 'N/A';
-            rrValueEl.classList.remove('text-success');
-        }
+    if (entryPrice > 0 && amountUSDC > 0 && targets.length > 0) {
+        targets.forEach(t => {
+            const tpPct = (parseFloat(t.percent) / 100);
+            const tpVol = (parseFloat(t.volume) / 100);
+            tpPnL += (tpPct * totalNotional * tpVol);
+        });
+    }
+    const tpEl = document.getElementById('est-tp-pnl');
+    if (tpEl) {
+        tpEl.innerText = `${tpPnL >= 0 ? '+' : ''}${tpPnL.toFixed(2)} USDC`;
+        tpEl.classList.toggle('text-success', tpPnL > 0);
+        tpEl.classList.toggle('text-danger', tpPnL < 0);
     }
 
-    // 4. Update individual TP previews
+    // 3. Calculate Risk/Reward
+    let rr = 0;
+    const risk = Math.abs(slPnL);
+    if (risk > 0) {
+        rr = tpPnL / risk;
+    }
+    const rrEl = document.getElementById('rr-ratio');
+    if (rrEl) {
+        rrEl.innerText = rr > 0 ? rr.toFixed(2) : '0.00';
+        rrEl.classList.toggle('text-success', rr >= 2);
+        rrEl.classList.toggle('text-warning', rr > 0 && rr < 2);
+    }
+
+    // 4. Update individual TP previews (legacy support if elements exist)
     targets.forEach((t, i) => {
         const badge = document.getElementById(`tp-pnl-preview-${i}`);
         if (badge) {
@@ -1352,13 +1318,11 @@ function updatePerformanceMetrics() {
         }
     });
 
-    // 5. Update SL preview
+    // 5. Update SL preview (legacy support if elements exist)
     const slBadge = document.getElementById('sl-pnl-preview');
     if (slBadge && slPrice > 0) {
-        const diffP = ((slPrice - entryPrice) / entryPrice) * multiplier;
-        const pnl = diffP * totalNotional;
-        slBadge.innerText = `${pnl.toFixed(2)} USDC`;
-        slBadge.className = 'badge ' + (pnl < 0 ? 'bg-danger' : 'bg-success');
+        slBadge.innerText = `${slPnL.toFixed(2)} USDC`;
+        slBadge.className = 'badge ' + (slPnL < 0 ? 'bg-danger' : 'bg-success');
     }
 }
 

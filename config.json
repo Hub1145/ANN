@@ -94,7 +94,7 @@
       "consolidated_reentry": true,
       "direction": "LONG",
       "entry_price": 0.09396,
-      "entry_type": "LIMIT",
+      "entry_type": "MARKET",
       "leverage": 15,
       "margin_type": "CROSSED",
       "move_to_breakeven": false,
