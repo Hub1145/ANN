@@ -37,13 +37,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     
 
-// Ensure metrics are updated on initial load and price updates
-socket.on('price_update', (data) => {
-    if (activeSymbol && data[activeSymbol]) {
-        updateTotalBaseUnits();
-        updatePerformanceMetrics();
-    }
-});
     // Initial config load via websocket
     socket.emit('get_config');
 });
@@ -874,21 +867,26 @@ function setupSocketListeners() {
             const bidEl = document.getElementById('bid-price');
             const askEl = document.getElementById('ask-price');
 
-            // Determine precision based on price magnitude
-            // For DOGE (~0.15) we need at least 4-5 decimals
-            // For BTC (~70000) 1-2 decimals is enough
             let precision = 2;
             if (bid < 0.1) precision = 6;
             else if (bid < 1) precision = 5;
             else if (bid < 10) precision = 4;
             else if (bid < 100) precision = 3;
 
-            if (bidEl && typeof bid === 'number') bidEl.innerText = bid.toFixed(precision);
-            if (askEl && typeof ask === 'number') askEl.innerText = ask.toFixed(precision);
+            if (bidEl && typeof bid === 'number' && bidEl.innerText !== bid.toFixed(precision)) {
+                bidEl.innerText = bid.toFixed(precision);
+            }
+            if (askEl && typeof ask === 'number' && askEl.innerText !== ask.toFixed(precision)) {
+                askEl.innerText = ask.toFixed(precision);
+            }
 
-            // Auto-populate entry price removed as it interferes with user limit price setting
-
-            updateTotalBaseUnits();
+            // Only recalculate metrics if the price has moved significantly or periodically
+            // to prevent "scatter" in the UI.
+            if (!window.lastUiUpdate || Date.now() - window.lastUiUpdate > 500) {
+                updateTotalBaseUnits();
+                updatePerformanceMetrics();
+                window.lastUiUpdate = Date.now();
+            }
         }
     });
 
@@ -904,7 +902,7 @@ function setupSocketListeners() {
         // Ensure activeAccountIdx is in bounds
         if (activeAccountIdx >= data.accounts.length) activeAccountIdx = 0;
 
-        container.innerHTML = (data.accounts || []).map((acc, idx) => {
+        const accountsHtml = (data.accounts || []).map((acc, idx) => {
             const ui = (allTranslations[currentLang] || {}).ui || {};
             let balanceText = 'Disconnected';
             let balanceClass = 'text-primary';
@@ -929,6 +927,11 @@ function setupSocketListeners() {
                 </div>
             `;
         }).join('');
+
+        // Diff the accounts HTML to prevent jitter
+        if (container.innerHTML !== accountsHtml) {
+            container.innerHTML = accountsHtml;
+        }
 
         currentBalance = data.total_equity || 0;
         const totalEquityVal = document.getElementById('total-equity-val');
@@ -964,7 +967,10 @@ function setupSocketListeners() {
                 `);
             }
         });
-        posTable.innerHTML = rows.join('');
+        const posHtml = rows.join('');
+        if (posTable.innerHTML !== posHtml) {
+            posTable.innerHTML = posHtml;
+        }
 
         renderOpenOrders(data.open_orders || []);
     });
@@ -1007,8 +1013,17 @@ function setupSocketListeners() {
 
         // Only update full UI if we didn't have a stable selection or it's a first load
         // But we actually need to update fields to match config.
-        // To avoid "reverting" while user is typing, we could check document.activeElement
-        if (!document.activeElement || !document.activeElement.id || !['inputTradeAmountUSDC', 'inputEntryPrice', 'tpVolumeSlider', 'inputTpPercent', 'inputTpVolume', 'stopLossPrice'].includes(document.activeElement.id)) {
+        // Expanded guard for active elements to prevent input resets
+        const activeId = document.activeElement ? document.activeElement.id : null;
+        const guardedIds = [
+            'inputTradeAmountUSDC', 'inputEntryPrice', 'tpVolumeSlider',
+            'inputTpPercent', 'inputTpVolume', 'stopLossPrice',
+            'slOrderPrice', 'slTimeoutDuration', 'inputEntryGridPrice',
+            'inputEntryGridVolume', 'trailingBuyDeviation', 'trailingDeviation',
+            'inputCostBasis'
+        ];
+
+        if (!activeId || !guardedIds.includes(activeId)) {
             updateUIFromConfig();
         }
     });

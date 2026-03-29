@@ -737,7 +737,7 @@ class BinanceTradingBotEngine:
                         'initial_filled': False,
                         'initial_order_id': 'GRID_PENDING',
                         'initial_orders': {},
-                        'avg_entry_price': 0.0,
+                        'avg_entry_price': entry_price, # Base price for grid
                         'levels': {},
                         'consolidated_tp_id': None
                     }
@@ -771,6 +771,18 @@ class BinanceTradingBotEngine:
                 if not placed_any:
                     with self.data_lock:
                         self.grid_state[(idx, symbol)] = [t for t in self.grid_state[(idx, symbol)] if t.get('trade_id') != trade_id]
+                else:
+                    # For DCA entry grid, we also place the TP grid immediately (Production Ready)
+                    # based on the main entry price. It will be refined as fills happen.
+                    if strategy.get('tp_enabled', True):
+                        tp_targets = strategy.get('tp_targets', [])
+                        if not tp_targets:
+                            dev = float(strategy.get('price_deviation') or 0.6)
+                            total_f = int(strategy.get('total_fractions') or 8)
+                            tp_targets = [{'percent': (i + 1) * dev, 'volume': 100.0 / total_f} for i in range(total_f)]
+
+                        trailing_enabled = strategy.get('trailing_tp_enabled', strategy.get('trailing_enabled', False))
+                        self._setup_tp_targets_logic(idx, symbol, entry_price, tp_targets, quantity, direction, trailing_enabled, trade_id)
                 return
 
             # 2. Traditional Single Entry Types
@@ -820,6 +832,18 @@ class BinanceTradingBotEngine:
                         if state:
                             state['initial_order_id'] = order_id
                             state['initial_orders'][order_id] = {'qty': quantity, 'price': entry_price, 'filled': False}
+                            state['avg_entry_price'] = entry_price # Use planned entry price for initial TP grid
+
+                    # IMMEDIATELY PLACE TP GRID (Production Ready: Don't wait for fill)
+                    if strategy.get('tp_enabled', True):
+                        tp_targets = strategy.get('tp_targets', [])
+                        if not tp_targets:
+                            dev = float(strategy.get('price_deviation') or 0.6)
+                            total_f = int(strategy.get('total_fractions') or 8)
+                            tp_targets = [{'percent': (i + 1) * dev, 'volume': 100.0 / total_f} for i in range(total_f)]
+
+                        trailing_enabled = strategy.get('trailing_tp_enabled', strategy.get('trailing_enabled', False))
+                        self._setup_tp_targets_logic(idx, symbol, entry_price, tp_targets, quantity, direction, trailing_enabled, trade_id)
                 else:
                     # Remove pending state and set a cooldown to avoid hammering the API
                     with self.data_lock:
@@ -1120,7 +1144,7 @@ class BinanceTradingBotEngine:
             # Place orders outside lock
             for item in levels_to_re_place:
                 client_id = f"trd-{current_trade_id}-tp-{item['level']}"
-                tp_id = self._place_limit_order(idx, symbol, Client.SIDE_SELL if direction == 'LONG' else Client.SIDE_BUY, item['qty'], item['price'], client_id=client_id)
+                tp_id = self._place_limit_order(idx, symbol, Client.SIDE_SELL if direction == 'LONG' else Client.SIDE_BUY, item['qty'], item['price'], client_id=client_id, reduce_only=True)
                 with self.data_lock:
                     if (idx, symbol) in self.grid_state:
                          # Ensure trade still exists
@@ -1292,7 +1316,7 @@ class BinanceTradingBotEngine:
                 order_id = existing_order['orderId']
                 self.log(f"Adopting existing TP order {order_id} (Client ID {client_id}) for {symbol}", "info", account_name=self.accounts[idx]['info'].get('name'))
             else:
-                order_id = self._place_limit_order(idx, symbol, o['side'], o['qty'], o['price'], client_id=client_id)
+                order_id = self._place_limit_order(idx, symbol, o['side'], o['qty'], o['price'], client_id=client_id, reduce_only=True)
             
             if order_id:
                 with self.data_lock:
@@ -1329,7 +1353,7 @@ class BinanceTradingBotEngine:
         margin_required = (notional / leverage) * 1.05
         return balance >= margin_required
 
-    def _place_limit_order(self, idx, symbol, side, qty, price, client_id=None):
+    def _place_limit_order(self, idx, symbol, side, qty, price, client_id=None, reduce_only=False):
         """Places a limit order. ENSURE NO LOCKS ARE HELD WHEN CALLING THIS."""
         if idx not in self.accounts: return None
         client = self.accounts[idx]['client']
@@ -1381,7 +1405,8 @@ class BinanceTradingBotEngine:
                 'type': Client.FUTURE_ORDER_TYPE_LIMIT,
                 'timeInForce': Client.TIME_IN_FORCE_GTC,
                 'quantity': formatted_qty_str,
-                'price': formatted_price_str
+                'price': formatted_price_str,
+                'reduceOnly': 'true' if reduce_only else 'false'
             }
             if client_id:
                 params['newClientOrderId'] = client_id
@@ -2219,6 +2244,17 @@ class BinanceTradingBotEngine:
                         if new_id:
                             with self.data_lock:
                                 trade['initial_order_id'] = new_id
+
+                            # IMMEDIATELY PLACE TP GRID (Production Ready: Don't wait for fill)
+                            if strategy.get('tp_enabled', True):
+                                tp_targets = strategy.get('tp_targets', [])
+                                if not tp_targets:
+                                    dev = float(strategy.get('price_deviation') or 0.6)
+                                    total_f = int(strategy.get('total_fractions') or 8)
+                                    tp_targets = [{'percent': (i + 1) * dev, 'volume': 100.0 / total_f} for i in range(total_f)]
+
+                                trailing_enabled = strategy.get('trailing_tp_enabled', strategy.get('trailing_enabled', False))
+                                self._setup_tp_targets_logic(idx, symbol, order_price, tp_targets, quantity, direction, trailing_enabled, trade_id)
                     except Exception as e:
                         self.log("cond_limit_failed", level='error', account_name=self.accounts[idx]['info'].get('name'), is_key=True, error=str(e))
 
@@ -2267,7 +2303,18 @@ class BinanceTradingBotEngine:
                 quantity=self._format_quantity(symbol, quantity),
                 newClientOrderId=client_id
             )
-            # The user data handler will catch the fill and place the grid
+
+            # IMMEDIATELY PLACE TP GRID (Production Ready: Don't wait for fill)
+            if strategy.get('tp_enabled', True):
+                tp_targets = strategy.get('tp_targets', [])
+                if not tp_targets:
+                    dev = float(strategy.get('price_deviation') or 0.6)
+                    total_f = int(strategy.get('total_fractions') or 8)
+                    tp_targets = [{'percent': (i + 1) * dev, 'volume': 100.0 / total_f} for i in range(total_f)]
+
+                trailing_enabled = strategy.get('trailing_tp_enabled', strategy.get('trailing_enabled', False))
+                # For MARKET entry, we use current_price as proxy until fill event provides exact avg price
+                self._setup_tp_targets_logic(idx, symbol, current_price, tp_targets, quantity, direction, trailing_enabled, trade_id)
         except Exception as e:
             self.log("market_entry_failed", level='error', account_name=self.accounts[idx]['info'].get('name'), is_key=True, error=str(e))
             # Cleanup if failed
