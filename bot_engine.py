@@ -59,6 +59,11 @@ class BinanceTradingBotEngine:
         self.trailing_state = {}
         self.last_log_times = {} # key -> timestamp
         
+        # Local cache for recently placed client order IDs to prevent -4116
+        # Maps (account_index, symbol) -> { client_id: timestamp }
+        self.recent_client_ids = {}
+        self.tp_setup_locks = {} # (account_index, symbol, trade_id) -> Lock
+
         self._setup_logging()
         
         # Start global background tasks immediately (pricing, metrics)
@@ -83,6 +88,17 @@ class BinanceTradingBotEngine:
         try:
             with open(self.config_path, 'r') as f:
                 config = json.load(f)
+
+            # Security: Allow environment variables to override empty config keys
+            import os
+            for i, acc in enumerate(config.get('api_accounts', [])):
+                env_key = os.environ.get(f'BINANCE_API_KEY_{i+1}')
+                env_secret = os.environ.get(f'BINANCE_API_SECRET_{i+1}')
+                if env_key and not acc.get('api_key'):
+                    acc['api_key'] = env_key
+                if env_secret and not acc.get('api_secret'):
+                    acc['api_secret'] = env_secret
+
             return config
         except Exception as e:
             logging.error(f"Error loading config: {e}")
@@ -633,7 +649,35 @@ class BinanceTradingBotEngine:
             existing_trade = next((t for t in trades if t.get('trade_id') == trade_id), None)
             
             if existing_trade:
-                # Trade already active/pending, worker doesn't need to do more for entry
+                # Trade already active/pending.
+                # Check if TP grid placement failed (e.g. ReduceOnly -2022) and needs retry.
+                if existing_trade.get('initial_filled') and strategy.get('tp_enabled', True):
+                    levels = existing_trade.get('levels', {})
+                    # If levels dict is empty OR has unfilled levels without an order ID
+                    # (excluding market mode or trailing eligible)
+                    needs_tp_retry = False
+                    if not levels:
+                        needs_tp_retry = True
+                    else:
+                        for lvl in levels.values():
+                            if not lvl.get('tp_order_id') and not lvl.get('filled') and not lvl.get('is_market') and not lvl.get('trailing_eligible'):
+                                needs_tp_retry = True; break
+
+                    if needs_tp_retry:
+                        # Only retry every 10 seconds to avoid spamming
+                        retry_key = f"tp_retry_cooldown_{idx}_{symbol}_{trade_id}"
+                        if time.time() - self.last_log_times.get(retry_key, 0) > 10:
+                            self.last_log_times[retry_key] = time.time()
+
+                            tp_targets = strategy.get('tp_targets', [])
+                            avg_e = existing_trade.get('avg_entry_price', current_price)
+                            qty = existing_trade.get('quantity', 0)
+                            trailing_enabled = strategy.get('trailing_tp_enabled', strategy.get('trailing_enabled', False))
+
+                            # Fire and forget setup (it's debounced internally by tp_lock)
+                            threading.Thread(target=self._setup_tp_targets_logic,
+                                             args=(idx, symbol, avg_e, tp_targets, qty, direction, trailing_enabled, trade_id),
+                                             daemon=True).start()
                 return
 
         # NEW: use_existing only applies to the primary 'manual' task (auto-attach on start)
@@ -1236,133 +1280,168 @@ class BinanceTradingBotEngine:
             logging.warning(f"[_setup_tp_targets_logic] Skipping TP placement for {symbol}: total_qty is {total_qty} (Trade {trade_id})")
             return
 
-        acc_name = self.accounts[idx]['info'].get('name') if idx in self.accounts else (self.bg_clients[idx]['name'] if idx in self.bg_clients else str(idx))
-        strategy = self._get_strategy(idx, symbol)
-        consolidated_tp = strategy.get('consolidated_tp', False)
-        tp_market_mode = strategy.get('tp_market_mode', False)
-        
+        # Debounce: Ensure only one TP setup runs at a time for this specific trade
+        lock_key = (idx, symbol, trade_id)
         with self.data_lock:
-            trades = self.grid_state.get((idx, symbol), [])
-            state = next((t for t in trades if t.get('trade_id') == trade_id), None)
-            if not state: return
-            
-            client = self.accounts[idx]['client']
-            
-            # 1. Cancel existing orders to prevent orphaned orders (Individual levels)
-            if state.get('levels'):
-                for lvl in state['levels'].values():
-                    o_id = lvl.get('tp_order_id')
-                    if o_id:
-                        try: self._safe_api_call(client.futures_cancel_order, symbol=symbol, orderId=o_id)
-                        except: pass
+            # Periodic cleanup of recent_client_ids (if older than 1 hour)
+            now = time.time()
+            if (idx, symbol) in self.recent_client_ids:
+                self.recent_client_ids[(idx, symbol)] = {cid: ts for cid, ts in self.recent_client_ids[(idx, symbol)].items() if now - ts < 3600}
 
-            # 2. Cancel existing consolidated TP
-            old_ctp_id = state.get('consolidated_tp_id')
-            if old_ctp_id:
-                try: self._safe_api_call(client.futures_cancel_order, symbol=symbol, orderId=old_ctp_id)
-                except: pass
-                state['consolidated_tp_id'] = None
+            if lock_key not in self.tp_setup_locks:
+                self.tp_setup_locks[lock_key] = threading.Lock()
+            tp_lock = self.tp_setup_locks[lock_key]
 
-            state['levels'] = {} # Reset levels for new targets
+        if not tp_lock.acquire(blocking=False):
+            logging.debug(f"[_setup_tp_targets_logic] Skipping redundant TP setup for {symbol} (Trade {trade_id}) - already in progress.")
+            return
+
+        try:
+            acc_name = self.accounts[idx]['info'].get('name') if idx in self.accounts else (self.bg_clients[idx]['name'] if idx in self.bg_clients else str(idx))
+            strategy = self._get_strategy(idx, symbol)
+            consolidated_tp = strategy.get('consolidated_tp', False)
+            tp_market_mode = strategy.get('tp_market_mode', False)
             
-            # Gather all order parameters and initialize state levels
-            orders_to_place = []
-            
-            if consolidated_tp:
-                target_vol_total = sum(float(t.get('volume') or 0) for t in targets) / 100.0
-                qty = total_qty * target_vol_total
+            with self.data_lock:
+                trades = self.grid_state.get((idx, symbol), [])
+                state = next((t for t in trades if t.get('trade_id') == trade_id), None)
+                if not state: return
                 
-                first_target = targets[0] if targets else {'percent': 0.6}
-                pct = float(first_target.get('percent') or 0) / 100.0
-                tp_price = entry_price * (1 + pct) if direction == 'LONG' else entry_price * (1 - pct)
-                side = Client.SIDE_SELL if direction == 'LONG' else Client.SIDE_BUY
+                client = self.accounts[idx]['client']
                 
-                if not tp_market_mode:
-                    orders_to_place.append({'level': 1, 'side': side, 'qty': qty, 'price': tp_price, 'is_consolidated': True})
-                
-                state['levels'][1] = {
-                    'tp_order_id': None,
-                    'price': tp_price,
-                    'percent': pct,
-                    'qty': qty,
-                    'side': side,
-                    'is_market': tp_market_mode,
-                    'trailing_eligible': False,
-                    'filled': False
-                }
-            else:
-                for i, target in enumerate(targets, 1):
-                    pct = float(target.get('percent') or 0) / 100.0
-                    volume_pct = float(target.get('volume') or 0) / 100.0
-                    qty = total_qty * volume_pct
+                # 1. Cancel existing orders to prevent orphaned orders (Individual levels)
+                if state.get('levels'):
+                    for lvl in state['levels'].values():
+                        o_id = lvl.get('tp_order_id')
+                        if o_id:
+                            try: self._safe_api_call(client.futures_cancel_order, symbol=symbol, orderId=o_id)
+                            except: pass
 
-                    if direction == 'LONG':
-                        tp_price = entry_price * (1 + pct)
-                        side = Client.SIDE_SELL
-                    else:
-                        tp_price = entry_price * (1 - pct)
-                        side = Client.SIDE_BUY
+                # 2. Cancel existing consolidated TP
+                old_ctp_id = state.get('consolidated_tp_id')
+                if old_ctp_id:
+                    try: self._safe_api_call(client.futures_cancel_order, symbol=symbol, orderId=old_ctp_id)
+                    except: pass
+                    state['consolidated_tp_id'] = None
 
-                    is_last = (i == len(targets))
-                    trailing_eligible = is_last and trailing_tp_enabled
+                state['levels'] = {} # Reset levels for new targets
 
-                    if not tp_market_mode and not trailing_eligible:
-                        orders_to_place.append({'level': i, 'side': side, 'qty': qty, 'price': tp_price})
+                # Gather all order parameters and initialize state levels
+                orders_to_place = []
 
-                    state['levels'][i] = {
+                if consolidated_tp:
+                    target_vol_total = sum(float(t.get('volume') or 0) for t in targets) / 100.0
+                    qty = total_qty * target_vol_total
+
+                    first_target = targets[0] if targets else {'percent': 0.6}
+                    pct = float(first_target.get('percent') or 0) / 100.0
+                    tp_price = entry_price * (1 + pct) if direction == 'LONG' else entry_price * (1 - pct)
+                    side = Client.SIDE_SELL if direction == 'LONG' else Client.SIDE_BUY
+
+                    if not tp_market_mode:
+                        orders_to_place.append({'level': 1, 'side': side, 'qty': qty, 'price': tp_price, 'is_consolidated': True})
+
+                    state['levels'][1] = {
                         'tp_order_id': None,
-                        're_entry_order_id': None,
                         'price': tp_price,
                         'percent': pct,
                         'qty': qty,
                         'side': side,
                         'is_market': tp_market_mode,
-                        'trailing_eligible': trailing_eligible,
+                        'trailing_eligible': False,
                         'filled': False
                     }
+                else:
+                    for i, target in enumerate(targets, 1):
+                        pct = float(target.get('percent') or 0) / 100.0
+                        volume_pct = float(target.get('volume') or 0) / 100.0
+                        qty = total_qty * volume_pct
 
-        if consolidated_tp:
-            # We assume at least one order if targets exist
-            if orders_to_place:
-                o = orders_to_place[0]
-                self.log("tp_aggregated_summary", account_name=acc_name, is_key=True, symbol=symbol, qty=f"{o['qty']:.2f}", price=f"{o['price']:.2f}")
-        else:
-            self.log("tp_placement_summary", account_name=acc_name, is_key=True, symbol=symbol, count=len(orders_to_place), total_qty=f"{total_qty:.2f}")
-        
-        # Fetch open orders from cache to avoid duplicate ClientID (-4116)
-        with self.data_lock:
-            open_orders_list = self.open_orders.get(idx, [])
-        symbol_open_orders = [o for o in open_orders_list if o.get('symbol') == symbol]
+                        if direction == 'LONG':
+                            tp_price = entry_price * (1 + pct)
+                            side = Client.SIDE_SELL
+                        else:
+                            tp_price = entry_price * (1 - pct)
+                            side = Client.SIDE_BUY
 
-        # Place orders outside lock
-        for o in orders_to_place:
-            client_id = f"trd-{trade_id}-tp-{o['level']}"
-            
-            # Check for existing order with same client_id
-            existing_order = next((oo for oo in symbol_open_orders if oo.get('clientOrderId') == client_id), None)
-            
-            order_id = None
-            if existing_order:
-                order_id = existing_order['orderId']
-                self.log(f"Adopting existing TP order {order_id} (Client ID {client_id}) for {symbol}", "info", account_name=self.accounts[idx]['info'].get('name'))
+                        is_last = (i == len(targets))
+                        trailing_eligible = is_last and trailing_tp_enabled
+
+                        if not tp_market_mode and not trailing_eligible:
+                            orders_to_place.append({'level': i, 'side': side, 'qty': qty, 'price': tp_price})
+
+                        state['levels'][i] = {
+                            'tp_order_id': None,
+                            're_entry_order_id': None,
+                            'price': tp_price,
+                            'percent': pct,
+                            'qty': qty,
+                            'side': side,
+                            'is_market': tp_market_mode,
+                            'trailing_eligible': trailing_eligible,
+                            'filled': False
+                        }
+
+            if consolidated_tp:
+                # We assume at least one order if targets exist
+                if orders_to_place:
+                    o = orders_to_place[0]
+                    self.log("tp_aggregated_summary", account_name=acc_name, is_key=True, symbol=symbol, qty=f"{o['qty']:.2f}", price=f"{o['price']:.2f}")
             else:
-                order_id = self._place_limit_order(idx, symbol, o['side'], o['qty'], o['price'], client_id=client_id, reduce_only=True)
+                self.log("tp_placement_summary", account_name=acc_name, is_key=True, symbol=symbol, count=len(orders_to_place), total_qty=f"{total_qty:.2f}")
             
-            if order_id:
-                with self.data_lock:
-                    if (idx, symbol) in self.grid_state:
-                        lvl = o['level']
-                        s = next((t for t in self.grid_state[(idx, symbol)] if t.get('trade_id') == trade_id), None)
-                        if s and lvl in s.get('levels', {}):
-                            s['levels'][lvl]['tp_order_id'] = order_id
-                        if o.get('is_consolidated') and s:
-                            s['consolidated_tp_id'] = order_id
-            else:
-                with self.data_lock:
-                    if (idx, symbol) in self.grid_state:
-                        s = next((t for t in self.grid_state[(idx, symbol)] if t.get('trade_id') == trade_id), None)
-                        if s and o['level'] in s.get('levels', {}):
-                            s['levels'][o['level']]['filled'] = True
+            # Fetch open orders from cache to avoid duplicate ClientID (-4116)
+            with self.data_lock:
+                open_orders_list = self.open_orders.get(idx, [])
+                recent_ids = self.recent_client_ids.get((idx, symbol), {})
+
+            symbol_open_orders = [o for o in open_orders_list if o.get('symbol') == symbol]
+
+            # Place orders outside lock
+            for o in orders_to_place:
+                client_id = f"trd-{trade_id}-tp-{o['level']}"
+
+                # Check for existing order with same client_id in REST cache OR our local recent cache
+                existing_order = next((oo for oo in symbol_open_orders if oo.get('clientOrderId') == client_id), None)
+                is_recent = client_id in recent_ids and (time.time() - recent_ids[client_id] < 10)
+
+                order_id = None
+                if existing_order:
+                    order_id = existing_order['orderId']
+                    self.log(f"Adopting existing TP order {order_id} (Client ID {client_id}) for {symbol}", "info", account_name=self.accounts[idx]['info'].get('name'))
+                elif is_recent:
+                    # Skip placement but don't mark as error - it's already in flight
+                    logging.debug(f"Skipping placement of {client_id} for {symbol} - already in flight.")
+                    continue
+                else:
+                    order_id = self._place_limit_order(idx, symbol, o['side'], o['qty'], o['price'], client_id=client_id, reduce_only=True)
+
+                # If placement failed but it's a known 'retry' scenario, mark level as unplaced
+                if not order_id:
+                    # Check if it was rejected due to ReduceOnly
+                    if self.trailing_state.get((idx, symbol, client_id)) == 'REJECTED_REDUCE_ONLY':
+                        # Do NOT mark as filled. Leaving it unplaced will allow _symbol_logic_worker
+                        # to retry this setup in the next loop iteration once the fill is confirmed.
+                        logging.debug(f"Level {o['level']} for {symbol} (Trade {trade_id}) marked for retry.")
+                        continue
+
+                if order_id:
+                    with self.data_lock:
+                        if (idx, symbol) in self.grid_state:
+                            lvl = o['level']
+                            s = next((t for t in self.grid_state[(idx, symbol)] if t.get('trade_id') == trade_id), None)
+                            if s and lvl in s.get('levels', {}):
+                                s['levels'][lvl]['tp_order_id'] = order_id
+                            if o.get('is_consolidated') and s:
+                                s['consolidated_tp_id'] = order_id
+                else:
+                    with self.data_lock:
+                        if (idx, symbol) in self.grid_state:
+                            s = next((t for t in self.grid_state[(idx, symbol)] if t.get('trade_id') == trade_id), None)
+                            if s and o['level'] in s.get('levels', {}):
+                                s['levels'][o['level']]['filled'] = True
+        finally:
+            tp_lock.release()
 
     def _check_balance_for_order(self, idx, qty, price, leverage=None, symbol=None):
         # Specifically check USDC balance for USDC-M pairs
@@ -1445,11 +1524,29 @@ class BinanceTradingBotEngine:
                 params['newClientOrderId'] = client_id
 
             order = self._safe_api_call(target_client.futures_create_order, **params)
+
+            # Reset reject-wait if successful
+            wait_key = (idx, symbol, client_id)
+            if wait_key in self.trailing_state: del self.trailing_state[wait_key]
+
+            # Cache client_id immediately to prevent -4116 in rapid succession
+            if client_id:
+                with self.data_lock:
+                    if (idx, symbol) not in self.recent_client_ids:
+                        self.recent_client_ids[(idx, symbol)] = {}
+                    self.recent_client_ids[(idx, symbol)][client_id] = time.time()
+
             return order['orderId']
         except BinanceAPIException as e:
             # Catch specific price out of range errors (including -4016 and -4025)
             if e.code in [-4016, -4025] or "Price out of range" in e.message or "Price higher than" in e.message or "Price lower than" in e.message:
                 self.log("limit_order_price_error", level='warning', account_name=acc_name, is_key=True, symbol=symbol, error=e.message)
+            elif e.code == -2022:
+                # ReduceOnly rejected - likely entry not yet confirmed in Binance risk engine
+                # Cache the rejection so setup_tp_logic knows to retry later
+                if client_id:
+                    self.trailing_state[(idx, symbol, client_id)] = 'REJECTED_REDUCE_ONLY'
+                logging.debug(f"ReduceOnly rejected for {symbol} ({client_id}). Entry likely in-flight.")
             else:
                 self.log("limit_order_failed", level='error', account_name=acc_name, is_key=True, error=str(e))
             return None

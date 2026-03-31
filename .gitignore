@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+*.log
+.DS_Store
+.env
+verification/
+app_output.log
+binance_bot.log
