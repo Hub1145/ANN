@@ -340,11 +340,8 @@ class BinanceTradingBotEngine:
                     if old_twm:
                         try:
                             old_loop = old_twm._loop
-                            old_twm.stop()
-                            old_twm.join(timeout=1.0)
-                            if old_loop and not old_loop.is_running():
-                                try: old_loop.close()
-                                except: pass
+                            threading.Thread(target=old_twm.stop, daemon=True).start()
+                            old_twm.join(timeout=0.2)
                         except: pass
                     self._close_client(self.bg_clients[idx].get('client'))
                     del self.bg_clients[idx]
@@ -361,11 +358,9 @@ class BinanceTradingBotEngine:
                     if old_twm:
                         try:
                             old_loop = old_twm._loop
-                            old_twm.stop()
-                            old_twm.join(timeout=1.0)
-                            if old_loop and not old_loop.is_running():
-                                try: old_loop.close()
-                                except: pass
+                            # Wrap stop in a way that handles library-level crashes
+                            threading.Thread(target=old_twm.stop, daemon=True).start()
+                            old_twm.join(timeout=0.2)
                         except: pass
                     self._close_client(old_bg.get('client'))
                     del self.bg_clients[idx]
@@ -580,8 +575,8 @@ class BinanceTradingBotEngine:
         acc = self.accounts[idx]
         client = acc['client']
 
-        # Ensure we have a fresh balance before trade decision
-        self._update_account_metrics(idx, force=False)
+        # Optimization: Remove forced update in loop. Rely on background worker and WebSocket.
+        # self._update_account_metrics(idx, force=False)
 
         strategy = self._get_strategy(idx, symbol)
         if not strategy:
@@ -1564,19 +1559,21 @@ class BinanceTradingBotEngine:
         client = acc['client']
 
         try:
-            # No throttle for live balance, but we can separate balance and position updates for efficiency
-            # Balance (Weight 1)
-            balances = self._safe_api_call(client.futures_account_balance)
-            usdc_balance = 0.0
-            if balances:
-                for b in balances:
-                    if b['asset'] == 'USDC':
-                        usdc_balance = float(b.get('balance') or 0)
-                        break
+            # Balance (Weight 1) - Update every 30s unless forced
+            balance_throttle = 10 if idx in self.accounts else 30
+            if force or time.time() - acc.get('last_balance_update', 0) > balance_throttle:
+                acc['last_balance_update'] = time.time()
+                balances = self._safe_api_call(client.futures_account_balance)
+                usdc_balance = 0.0
+                if balances:
+                    for b in balances:
+                        if b['asset'] == 'USDC':
+                            usdc_balance = float(b.get('balance') or 0)
+                            break
 
-            with self.data_lock:
-                self.account_balances[idx] = usdc_balance
-                self.account_last_update[idx] = time.time()
+                with self.data_lock:
+                    self.account_balances[idx] = usdc_balance
+                    self.account_last_update[idx] = time.time()
 
             # Positions (Weight 5) - Update every 10s unless forced (WebSocket is primary)
             pos_throttle = 10 if idx in self.accounts else 30
@@ -1625,11 +1622,11 @@ class BinanceTradingBotEngine:
 
         except BinanceAPIException as e:
             if e.code == -2015:
-                self.account_errors[idx] = "Invalid API Key/Permissions"
+                self.account_errors[idx] = "Invalid API Keys or insufficient permissions. Check if IP " + str(self.server_ip) + " is whitelisted."
                 log_key = f"invalid_api_{idx}"
                 now = time.time()
                 if now - self.last_log_times.get(log_key, 0) > 300:
-                    self.log("invalid_api_keys", level='error', account_name=acc['info'].get('name'), is_key=True, ip=self.server_ip)
+                    self.log(f"Invalid API Keys or insufficient permissions for {acc['info'].get('name')}. Ensure Futures are enabled and IP {self.server_ip} is whitelisted.", level='error', account_name=acc['info'].get('name'))
                     self.last_log_times[log_key] = now
             else:
                 logging.error(f"Error updating metrics for account {idx}: {e}")
@@ -1840,6 +1837,16 @@ class BinanceTradingBotEngine:
         with self.config_update_lock:
             old_config = self.config
             self.config = new_config
+
+            # Security: Re-apply environment overrides to incoming config
+            import os
+            for i, acc in enumerate(self.config.get('api_accounts', [])):
+                env_key = os.environ.get(f'BINANCE_API_KEY_{i+1}')
+                env_secret = os.environ.get(f'BINANCE_API_SECRET_{i+1}')
+                if env_key and not acc.get('api_key'):
+                    acc['api_key'] = env_key
+                if env_secret and not acc.get('api_secret'):
+                    acc['api_secret'] = env_secret
 
             # Handle Language Change
             lang_changed = old_config.get('language') != self.config.get('language')
