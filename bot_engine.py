@@ -625,63 +625,61 @@ class BinanceTradingBotEngine:
             symbol_open_orders = [o for o in self.open_orders.get(idx, []) if o.get('symbol') == symbol]
             has_open_orders = len(symbol_open_orders) > 0
 
-        with self.data_lock:
             if (idx, symbol) not in self.grid_state:
                 self.grid_state[(idx, symbol)] = []
             
-            # Check if we already have an "manual" trade or any active trade for this symbol
+            # Check if we already have this trade_id active
             trades = self.grid_state[(idx, symbol)]
-            manual_trade = next((t for t in trades if t.get('trade_id') == trade_id), None)
+            existing_trade = next((t for t in trades if t.get('trade_id') == trade_id), None)
             
-            if manual_trade:
+            if existing_trade:
                 # Trade already active/pending, worker doesn't need to do more for entry
                 return
 
+        # NEW: use_existing only applies to the primary 'manual' task (auto-attach on start)
+        # 'Add Trade' buttons always create new positions.
         use_existing = strategy.get('use_existing_assets', strategy.get('use_existing', False))
+        is_primary_task = (trade_id == 'manual')
 
-        if use_existing and has_pos:
+
+        if has_pos and (is_primary_task and use_existing):
             # Force grid placement if not already placed
             setup_tp_args = None
             with self.data_lock:
-                # Create the manual trade if it doesn't exist
-                manual_trade = {
-                    'trade_id': trade_id,
-                    'initial_filled': True,
-                    'levels': {}
-                }
-                self.grid_state[(idx, symbol)].append(manual_trade)
-                state = manual_trade
+                # Check if already in state
+                state = next((t for t in self.grid_state[(idx, symbol)] if t.get('trade_id') == trade_id), None)
+                if not state:
+                    # Create the manual trade from existing position
+                    pos_qty = abs(float(p_info.get('amount') or 0))
+                    state = {
+                        'trade_id': trade_id,
+                        'initial_filled': True,
+                        'quantity': pos_qty,
+                        'levels': {}
+                    }
+                    self.grid_state[(idx, symbol)].append(state)
 
-            setup_tp_args = None
-            if use_existing:
-                # We only skip if it's the main automated task (id='manual'). 
-                # Explicit 'Add Trade' (id starts with 'man-') should proceed.
-                if idx in self.open_positions and symbol in self.open_positions[idx] and trade_id == 'manual':
-                    self.log("pos_exists_skip", account_name=acc['info'].get('name'), is_key=True, symbol=symbol)
-                    return
-# Only place TP grid if tp_enabled
+                # Only place TP grid if tp_enabled
                 if strategy.get('tp_enabled', True):
-                        # Prefer user-defined cost basis (Were Bought For) if provided
-                        entry_p = float(strategy.get('entry_price') or 0)
-                        if entry_p <= 0:
-                            entry_p = float(p_info.get('entryPrice') or 0)
-                        
-                        if entry_p <= 0:
-                            entry_p = current_price
-                        
-                        state['avg_entry_price'] = entry_p
-                        pos_qty = abs(float(p_info.get('positionAmt') or 0))
-                        actual_direction = 'LONG' if float(p_info.get('positionAmt') or 0) > 0 else 'SHORT'
+                    # Prefer user-defined cost basis (Were Bought For) if provided
+                    entry_p = float(strategy.get('entry_price') or 0)
+                    if entry_p <= 0:
+                        entry_p = float(p_info.get('entryPrice') or 0)
 
-                        tp_targets = strategy.get('tp_targets', [])
-                        if not tp_targets:
-                            total_f = int(strategy.get('total_fractions') or 8)
-                            dev = float(strategy.get('price_deviation') or 0.6)
-                            tp_targets = [
-                                {'percent': (i + 1) * dev, 'volume': 100.0 / total_f}
-                                for i in range(total_f)
-                            ]
-                        setup_tp_args = (idx, symbol, entry_p, tp_targets, pos_qty, actual_direction, trailing_tp_enabled, trade_id)
+                    if entry_p <= 0:
+                        entry_p = current_price
+
+                    state['avg_entry_price'] = entry_p
+                    pos_qty = state['quantity']
+                    actual_direction = 'LONG' if float(p_info.get('amount') or 0) > 0 else 'SHORT'
+
+                    tp_targets = strategy.get('tp_targets', [])
+                    if not tp_targets:
+                        total_f = int(strategy.get('total_fractions') or 8)
+                        dev = float(strategy.get('price_deviation') or 0.6)
+                        tp_targets = [{'percent': (i + 1) * dev, 'volume': 100.0 / total_f} for i in range(total_f)]
+                    setup_tp_args = (idx, symbol, entry_p, tp_targets, pos_qty, actual_direction, trailing_tp_enabled, trade_id)
+
             if setup_tp_args:
                 self._setup_tp_targets_logic(*setup_tp_args)
             return
@@ -738,6 +736,7 @@ class BinanceTradingBotEngine:
                         'initial_order_id': 'GRID_PENDING',
                         'initial_orders': {},
                         'avg_entry_price': entry_price, # Base price for grid
+                        'quantity': 0.0,
                         'levels': {},
                         'consolidated_tp_id': None
                     }
@@ -772,6 +771,10 @@ class BinanceTradingBotEngine:
                     with self.data_lock:
                         self.grid_state[(idx, symbol)] = [t for t in self.grid_state[(idx, symbol)] if t.get('trade_id') != trade_id]
                 else:
+                    # For DCA entry grid, update quantity based on intended entry
+                    with self.data_lock:
+                        state['quantity'] = quantity
+
                     # For DCA entry grid, we also place the TP grid immediately (Production Ready)
                     # based on the main entry price. It will be refined as fills happen.
                     if strategy.get('tp_enabled', True):
@@ -816,6 +819,22 @@ class BinanceTradingBotEngine:
 
             self.log("placing_initial", account_name=acc['info'].get('name'), is_key=True, direction=direction, price=entry_price)
             try:
+                # Ensure state exists BEFORE placing order so TP placement can find it
+                with self.data_lock:
+                    if (idx, symbol) not in self.grid_state:
+                        self.grid_state[(idx, symbol)] = []
+
+                    state = {
+                        'trade_id': trade_id,
+                        'initial_filled': False,
+                        'initial_order_id': 'PENDING',
+                        'initial_orders': {},
+                        'avg_entry_price': entry_price,
+                        'quantity': 0.0,
+                        'levels': {}
+                    }
+                    self.grid_state[(idx, symbol)].append(state)
+
                 c_id = f"trd-{trade_id}-entry"
                 # Adoption check
                 existing = next((oo for oo in symbol_open_orders if oo.get('clientOrderId') == c_id), None)
@@ -832,7 +851,7 @@ class BinanceTradingBotEngine:
                         if state:
                             state['initial_order_id'] = order_id
                             state['initial_orders'][order_id] = {'qty': quantity, 'price': entry_price, 'filled': False}
-                            state['avg_entry_price'] = entry_price # Use planned entry price for initial TP grid
+                            state['quantity'] = quantity
 
                     # IMMEDIATELY PLACE TP GRID (Production Ready: Don't wait for fill)
                     if strategy.get('tp_enabled', True):
@@ -985,15 +1004,13 @@ class BinanceTradingBotEngine:
     def _get_trade_quantity(self, trade):
         """Calculates the net quantity remaining in a specific trade."""
         qty = 0.0
-        # 1. Single Entry
-        if trade.get('initial_filled'):
-            qty += float(trade.get('quantity') or 0)
-        
-        # 2. Entry Grid (DCA)
+        # Sum all filled initial orders (works for both single and grid entries)
         if trade.get('initial_orders'):
             for o in trade['initial_orders'].values():
                 if o.get('filled'):
                     qty += float(o.get('qty') or 0)
+        elif trade.get('initial_filled'):
+            qty += float(trade.get('quantity') or 0)
         
         # 3. TP Fills (Reduce entry)
         if trade.get('levels'):
@@ -1081,9 +1098,12 @@ class BinanceTradingBotEngine:
                 if 'initial_orders' not in state: state['initial_orders'] = {}
                 state['initial_orders'][order_id] = {'qty': filled_qty, 'price': avg_price, 'filled': True}
                 
-                # Calculate weighted average entry price
+                # Update total quantity
                 filled_entries = [o for o in state['initial_orders'].values() if o.get('filled')]
                 total_filled_qty = sum(o['qty'] for o in filled_entries)
+                state['quantity'] = total_filled_qty
+
+                # Calculate weighted average entry price
                 total_cost = sum(o['qty'] * o['price'] for o in filled_entries)
                 weighted_avg = total_cost / total_filled_qty if total_filled_qty > 0 else avg_price
                 state['avg_entry_price'] = weighted_avg
@@ -1091,11 +1111,13 @@ class BinanceTradingBotEngine:
                 acc_name = self.accounts[idx]['info'].get('name')
                 self.log(f"Entry filled for {symbol} (Trade {current_trade_id}) at {avg_price}. Total Qty: {total_filled_qty}", account_name=acc_name, is_key=True)
                 
+                # Re-sync TP grid with exact filled price/quantity
                 if strategy.get('tp_enabled', True):
                     tp_targets = strategy.get('tp_targets', [])
                     if not tp_targets:
-                        dev = 0.6
-                        tp_targets = [{'percent': (i + 1) * dev, 'volume': 12.5} for i in range(8)]
+                        dev = float(strategy.get('price_deviation') or 0.6)
+                        total_f = int(strategy.get('total_fractions') or 8)
+                        tp_targets = [{'percent': (i + 1) * dev, 'volume': 100.0 / total_f} for i in range(total_f)]
                     
                     trailing_enabled = strategy.get('trailing_tp_enabled', strategy.get('trailing_enabled', False))
                     setup_tp_args = (idx, symbol, weighted_avg, tp_targets, total_filled_qty, direction, trailing_enabled, current_trade_id)
@@ -1210,6 +1232,11 @@ class BinanceTradingBotEngine:
 
     def _setup_tp_targets_logic(self, idx, symbol, entry_price, targets, total_qty, direction, trailing_tp_enabled=False, trade_id=None):
         """Sets up TP targets. Performs API calls. Should be called WITHOUT holding data_lock."""
+        if total_qty <= 0:
+            logging.warning(f"[_setup_tp_targets_logic] Skipping TP placement for {symbol}: total_qty is {total_qty} (Trade {trade_id})")
+            return
+
+        acc_name = self.accounts[idx]['info'].get('name') if idx in self.accounts else (self.bg_clients[idx]['name'] if idx in self.bg_clients else str(idx))
         strategy = self._get_strategy(idx, symbol)
         consolidated_tp = strategy.get('consolidated_tp', False)
         tp_market_mode = strategy.get('tp_market_mode', False)
@@ -1295,9 +1322,12 @@ class BinanceTradingBotEngine:
                     }
 
         if consolidated_tp:
-            self.log(f"Placing AGGREGATED TP {symbol} at target 1 price", "info", account_name=self.accounts[idx]['info'].get('name'))
+            # We assume at least one order if targets exist
+            if orders_to_place:
+                o = orders_to_place[0]
+                self.log("tp_aggregated_summary", account_name=acc_name, is_key=True, symbol=symbol, qty=f"{o['qty']:.2f}", price=f"{o['price']:.2f}")
         else:
-            self.log(f"Placing {len(orders_to_place)} LIMIT TP orders for {symbol}", "info", account_name=self.accounts[idx]['info'].get('name'))
+            self.log("tp_placement_summary", account_name=acc_name, is_key=True, symbol=symbol, count=len(orders_to_place), total_qty=f"{total_qty:.2f}")
         
         # Fetch open orders from cache to avoid duplicate ClientID (-4116)
         with self.data_lock:
@@ -1355,9 +1385,12 @@ class BinanceTradingBotEngine:
 
     def _place_limit_order(self, idx, symbol, side, qty, price, client_id=None, reduce_only=False):
         """Places a limit order. ENSURE NO LOCKS ARE HELD WHEN CALLING THIS."""
-        if idx not in self.accounts: return None
-        client = self.accounts[idx]['client']
-        acc_name = self.accounts[idx]['info'].get('name')
+        # Use target_client to support both active and background (for safety/cancels if needed,
+        # though trading usually requires active accounts)
+        target_client = self.accounts[idx]['client'] if idx in self.accounts else self.bg_clients.get(idx, {}).get('client')
+        if not target_client: return None
+
+        acc_name = self.accounts[idx]['info'].get('name') if idx in self.accounts else self.bg_clients.get(idx, {}).get('name', str(idx))
 
         strategy = self._get_strategy(idx, symbol)
         leverage = int(strategy.get('leverage') or 20)
@@ -1379,7 +1412,7 @@ class BinanceTradingBotEngine:
             f_price = float(formatted_price_str)
 
             if f_qty <= 0:
-                self.log(f"Limit order skipped for {symbol}: Calculated quantity {f_qty} <= 0.", level='warning', account_name=acc_name)
+                self.log(f"Limit order skipped for {symbol}: Calculated quantity {qty} (formatted: {formatted_qty_str}) <= 0.", level='warning', account_name=acc_name)
                 return None
 
             # Min Notional Check
@@ -1394,7 +1427,7 @@ class BinanceTradingBotEngine:
                             break
 
             if notional < min_notional:
-                self.log(f"Limit order skipped for {symbol}: Notional {notional:.2f} < Min {min_notional}.", level='warning', account_name=acc_name)
+                self.log("order_skipped_min_notional", level='warning', account_name=acc_name, is_key=True, symbol=symbol, notional=f"{notional:.2f}", min_notional=f"{min_notional:.2f}")
                 return None
 
             self.log("placing_limit_order", account_name=acc_name, is_key=True, symbol=symbol, side=side, qty=formatted_qty_str, price=formatted_price_str)
@@ -1411,23 +1444,28 @@ class BinanceTradingBotEngine:
             if client_id:
                 params['newClientOrderId'] = client_id
 
-            order = self._safe_api_call(client.futures_create_order, **params)
+            order = self._safe_api_call(target_client.futures_create_order, **params)
             return order['orderId']
         except BinanceAPIException as e:
             # Catch specific price out of range errors (including -4016 and -4025)
             if e.code in [-4016, -4025] or "Price out of range" in e.message or "Price higher than" in e.message or "Price lower than" in e.message:
-                self.log("limit_order_price_error", level='warning', account_name=self.accounts[idx]['info'].get('name'), is_key=False, symbol=symbol, error=e.message)
+                self.log("limit_order_price_error", level='warning', account_name=acc_name, is_key=True, symbol=symbol, error=e.message)
             else:
-                self.log("limit_order_failed", level='error', account_name=self.accounts[idx]['info'].get('name'), is_key=True, error=str(e))
+                self.log("limit_order_failed", level='error', account_name=acc_name, is_key=True, error=str(e))
             return None
         except Exception as e:
             self.log("limit_order_failed", level='error', account_name=self.accounts[idx]['info'].get('name'), is_key=True, error=str(e))
             return None
 
     def _update_account_metrics(self, idx, force=False):
-        if idx not in self.accounts: return
-        acc = self.accounts[idx]
+        # Determine client to use (Active trade client preferred, then background client)
+        acc = self.accounts.get(idx)
+        if not acc:
+            acc = self.bg_clients.get(idx)
+
+        if not acc: return
         client = acc['client']
+
         try:
             # No throttle for live balance, but we can separate balance and position updates for efficiency
             # Balance (Weight 1)
@@ -1444,27 +1482,43 @@ class BinanceTradingBotEngine:
                 self.account_last_update[idx] = time.time()
 
             # Positions (Weight 5) - Update every 10s unless forced (WebSocket is primary)
-            if force or time.time() - acc.get('last_pos_update', 0) > 10:
+            pos_throttle = 10 if idx in self.accounts else 30
+            if force or time.time() - acc.get('last_pos_update', 0) > pos_throttle:
                 acc['last_pos_update'] = time.time()
-                account_info = self._safe_api_call(client.futures_account)
+
+                # Using futures_account for active accounts (more detailed),
+                # but futures_position_information for background to save weight if needed
+                if idx in self.accounts:
+                    account_info = self._safe_api_call(client.futures_account)
+                    raw_positions = account_info.get('positions', [])
+                    pos_key = 'positionAmt'
+                    price_key = 'entryPrice'
+                    up_key = 'unrealizedProfit'
+                else:
+                    raw_positions = self._safe_api_call(client.futures_position_information)
+                    pos_key = 'positionAmt'
+                    price_key = 'entryPrice'
+                    up_key = 'unRealizedProfit'
+
                 new_positions = {}
-                for p in account_info.get('positions', []):
+                for p in raw_positions:
                     sym = p.get('symbol')
                     if not sym: continue
-                    amt = float(p.get('positionAmt') or 0)
+                    amt = float(p.get(pos_key) or 0)
                     if amt != 0:
                         new_positions[sym] = {
                             'symbol': sym,
-                            'amount': p.get('positionAmt', '0'),
-                            'entryPrice': p.get('entryPrice', '0'),
-                            'unrealizedProfit': p.get('unrealizedProfit', '0'),
+                            'amount': p.get(pos_key, '0'),
+                            'entryPrice': p.get(price_key, '0'),
+                            'unrealizedProfit': p.get(up_key, '0'),
                             'leverage': p.get('leverage', '20')
                         }
                 with self.data_lock:
                     self.open_positions[idx] = new_positions
 
             # Open Orders (Weight 1) - Update every 10s
-            if force or time.time() - acc.get('last_orders_update', 0) > 10:
+            orders_throttle = 10 if idx in self.accounts else 30
+            if force or time.time() - acc.get('last_orders_update', 0) > orders_throttle:
                 acc['last_orders_update'] = time.time()
                 open_orders = self._safe_api_call(client.futures_get_open_orders)
                 with self.data_lock:
@@ -1573,20 +1627,64 @@ class BinanceTradingBotEngine:
 
                     symbol = p_copy['symbol']
                     trades = self.grid_state.get((idx, symbol), [])
-                    p_copy['is_external'] = (len(trades) == 0)
                     p_copy['trade_count'] = len(trades)
                     p_copy['trades'] = []
                     
+                    tracked_qty = 0.0
+                    tracked_notional = 0.0
+
+                    with self.market_data_lock:
+                        current_price = float(self.shared_market_data.get(symbol, {}).get('price') or p_copy.get('entryPrice') or 0)
+
                     for t in trades:
-                        t_summary = {
+                        t_qty = self._get_trade_quantity(t)
+                        is_filled = t.get('initial_filled', False)
+
+                        trade_pnl = 0.0
+                        if is_filled and t_qty > 0:
+                            avg_e = float(t.get('avg_entry_price') or 0)
+                            strategy = self._get_strategy(idx, symbol)
+                            direction = strategy.get('direction', 'LONG')
+                            multiplier = 1 if direction == 'LONG' else -1
+                            trade_pnl = (current_price - avg_e) * t_qty * multiplier
+
+                            tracked_qty += t_qty
+                            tracked_notional += (t_qty * avg_e)
+
+                        if t_qty == 0 and not is_filled:
+                            t_qty = float(t.get('quantity') or 0)
+
+                        p_copy['trades'].append({
                             'trade_id': t.get('trade_id'),
                             'entry_price': t.get('avg_entry_price', 0),
-                            'amount': self._get_trade_quantity(t),
-                            'filled': t.get('initial_filled', False),
-                            'pnl': 0.0 # Could calculate per-trade PnL if trackable
-                        }
-                        p_copy['trades'].append(t_summary)
+                            'amount': t_qty,
+                            'filled': is_filled,
+                            'pnl': trade_pnl
+                        })
 
+                    # Check for external portion
+                    total_qty_pa = abs(float(p_copy.get('amount') or 0))
+                    diff_qty = total_qty_pa - tracked_qty
+                    if diff_qty > 1e-6:
+                        total_avg = float(p_copy.get('entryPrice') or 0)
+                        total_notional_val = total_avg * total_qty_pa
+                        ext_notional = total_notional_val - tracked_notional
+                        ext_avg = ext_notional / diff_qty if diff_qty > 0 else total_avg
+
+                        strategy = self._get_strategy(idx, symbol)
+                        direction = strategy.get('direction', 'LONG')
+                        multiplier = 1 if direction == 'LONG' else -1
+                        ext_pnl = (current_price - ext_avg) * diff_qty * multiplier
+
+                        p_copy['trades'].append({
+                            'trade_id': 'External',
+                            'entry_price': ext_avg,
+                            'amount': diff_qty,
+                            'filled': True,
+                            'pnl': ext_pnl
+                        })
+
+                    p_copy['is_external'] = (len(trades) == 0)
                     all_positions.append(p_copy)
                     if p_copy['is_external']:
                         external_positions.append(p_copy)
@@ -1939,20 +2037,28 @@ class BinanceTradingBotEngine:
             for i, acc in self.accounts.items():
                 if acc['info'].get('name') == account_idx:
                     idx = i; break
+            if idx is None:
+                for i, acc in self.bg_clients.items():
+                    if acc.get('name') == account_idx:
+                        idx = i; break
 
-        if idx is None or idx not in self.accounts:
+        if idx is None:
             self.log(f"Account {account_idx} not found for cancellation", "error")
             return False
 
-        client = self.accounts[idx]['client']
+        target_client = self.accounts[idx]['client'] if idx in self.accounts else self.bg_clients.get(idx, {}).get('client')
+        if not target_client: return False
+
         try:
-            self._safe_api_call(client.futures_cancel_order, symbol=symbol, orderId=order_id)
-            self.log(f"Order {order_id} for {symbol} cancelled manually.", "info", account_name=self.accounts[idx]['info'].get('name'))
+            self._safe_api_call(target_client.futures_cancel_order, symbol=symbol, orderId=order_id)
+            acc_name = self.accounts[idx]['info'].get('name') if idx in self.accounts else self.bg_clients[idx]['name']
+            self.log(f"Order {order_id} for {symbol} cancelled manually.", "info", account_name=acc_name)
             # Force immediate UI refresh
             self._update_account_metrics(idx, force=True)
             return True
         except Exception as e:
-            self.log(f"Failed to cancel order {order_id}: {str(e)}", "error", account_name=self.accounts[idx]['info'].get('name'))
+            acc_name = self.accounts[idx]['info'].get('name') if idx in self.accounts else self.bg_clients.get(idx, {}).get('name', str(account_idx))
+            self.log(f"Failed to cancel order {order_id}: {str(e)}", "error", account_name=acc_name)
             return False
 
     def _global_background_worker(self):
@@ -2244,6 +2350,7 @@ class BinanceTradingBotEngine:
                         if new_id:
                             with self.data_lock:
                                 trade['initial_order_id'] = new_id
+                                trade['quantity'] = quantity
 
                             # IMMEDIATELY PLACE TP GRID (Production Ready: Don't wait for fill)
                             if strategy.get('tp_enabled', True):
@@ -2290,6 +2397,7 @@ class BinanceTradingBotEngine:
                 new_trade = {
                     'trade_id': trade_id,
                     'initial_filled': False,
+                    'quantity': quantity,
                     'levels': {}
                 }
                 self.grid_state[(idx, symbol)].append(new_trade)
@@ -2382,7 +2490,7 @@ class BinanceTradingBotEngine:
             qty_str = self._format_quantity(symbol, qty)
             f_qty = float(qty_str)
             if f_qty <= 0:
-                self.log(f"Market order skipped for {symbol}: Quantity {f_qty} <= 0.", level='warning', account_name=acc['info'].get('name'))
+                self.log("order_skipped_qty", level='warning', account_name=acc_name, is_key=True, symbol=symbol, qty=qty_str)
                 return True # Mark as "handled" to stop the loop
 
             # Notional check
@@ -2400,7 +2508,7 @@ class BinanceTradingBotEngine:
                                 min_notional = float(f.get('notional') or f.get('minNotional') or 5.0)
                                 break
                 if notional < min_notional:
-                    self.log(f"Market order skipped for {symbol}: Notional {notional:.2f} < Min {min_notional}.", level='warning', account_name=acc['info'].get('name'))
+                    self.log("order_skipped_min_notional", level='warning', account_name=acc_name, is_key=True, symbol=symbol, notional=f"{notional:.2f}", min_notional=f"{min_notional:.2f}")
                     return True # Mark as "handled" to stop the loop
 
             self._safe_api_call(client.futures_create_order,

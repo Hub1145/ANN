@@ -1,0 +1,350 @@
+2026-03-31 06:50:50,655 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:50:50,656 - INFO - Initialized 0 background clients in DEMO (Testnet) mode.
+2026-03-31 06:50:50,675 - INFO - Detected Server IP: 34.46.237.233
+2026-03-31 06:50:50,742 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:50:50,744 - ERROR - CRITICAL: Market client is unavailable. Skipping market WebSocket initialization.
+2026-03-31 06:50:50,746 - WARNING - Werkzeug appears to be used in a production deployment. Consider switching to a production web server instead.
+ * Serving Flask app 'app'
+ * Debug mode: off
+2026-03-31 06:50:50,752 - INFO - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:3000
+ * Running on http://192.168.0.2:3000
+2026-03-31 06:50:50,752 - INFO - [33mPress CTRL+C to quit[0m
+2026-03-31 06:50:50,826 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:50:50,907 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:50:50,992 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:50:51,075 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:50:51,077 - WARNING - Warning: Symbol DOGEUSDC not found on Binance. Please check if it is a valid USDC pair.
+2026-03-31 06:50:51,077 - WARNING - Warning: Symbol SOLUSDC not found on Binance. Please check if it is a valid USDC pair.
+2026-03-31 06:51:01,162 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:51:01,245 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:51:01,326 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:51:01,411 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:51:04,970 - INFO - 127.0.0.1 - - [31/Mar/2026 06:51:04] "GET / HTTP/1.1" 200 -
+2026-03-31 06:51:04,995 - INFO - 127.0.0.1 - - [31/Mar/2026 06:51:04] "GET /static/css/style.css HTTP/1.1" 200 -
+2026-03-31 06:51:04,998 - INFO - 127.0.0.1 - - [31/Mar/2026 06:51:04] "GET /static/js/app.js HTTP/1.1" 200 -
+2026-03-31 06:51:05,179 - INFO - 127.0.0.1 - - [31/Mar/2026 06:51:05] "GET /socket.io/?EIO=4&transport=polling&t=Pr2gG1L HTTP/1.1" 200 -
+2026-03-31 06:51:05,194 - INFO - 127.0.0.1 - - [31/Mar/2026 06:51:05] "POST /socket.io/?EIO=4&transport=polling&t=Pr2gG1a&sid=hMrs1EYpNh6cu1tLAAAA HTTP/1.1" 200 -
+2026-03-31 06:51:05,198 - INFO - 127.0.0.1 - - [31/Mar/2026 06:51:05] "GET /socket.io/?EIO=4&transport=polling&t=Pr2gG1c&sid=hMrs1EYpNh6cu1tLAAAA HTTP/1.1" 200 -
+2026-03-31 06:51:05,202 - INFO - 127.0.0.1 - - [31/Mar/2026 06:51:05] "GET /socket.io/?EIO=4&transport=polling&t=Pr2gG1m&sid=hMrs1EYpNh6cu1tLAAAA HTTP/1.1" 200 -
+2026-03-31 06:51:05,207 - INFO - 127.0.0.1 - - [31/Mar/2026 06:51:05] "POST /socket.io/?EIO=4&transport=polling&t=Pr2gG1o&sid=hMrs1EYpNh6cu1tLAAAA HTTP/1.1" 200 -
+2026-03-31 06:51:11,500 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:51:11,585 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:51:11,669 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:51:11,751 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:51:21,835 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:51:21,921 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:51:22,004 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:51:22,087 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:51:32,171 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:51:32,253 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:51:32,336 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:51:32,418 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:51:35,289 - INFO - 127.0.0.1 - - [31/Mar/2026 06:51:35] "GET /socket.io/?EIO=4&transport=websocket&sid=hMrs1EYpNh6cu1tLAAAA HTTP/1.1" 200 -
+2026-03-31 06:51:42,502 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:51:42,585 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:51:42,670 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:51:42,754 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:51:52,858 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:51:52,940 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:51:53,025 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:51:53,106 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:52:03,191 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:52:03,276 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:52:03,361 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:52:03,445 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:52:13,529 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:52:13,612 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:52:13,696 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:52:13,782 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:52:23,866 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:52:23,949 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:52:24,032 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:52:24,112 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:52:34,196 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:52:34,280 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:52:34,362 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:52:34,444 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:52:44,531 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:52:44,615 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:52:44,701 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:52:44,785 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:52:54,886 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:52:54,970 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:52:55,054 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:52:55,135 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:52:56,555 - INFO - 127.0.0.1 - - [31/Mar/2026 06:52:56] "GET / HTTP/1.1" 200 -
+2026-03-31 06:52:56,567 - INFO - 127.0.0.1 - - [31/Mar/2026 06:52:56] "GET /static/css/style.css HTTP/1.1" 200 -
+2026-03-31 06:52:56,569 - INFO - 127.0.0.1 - - [31/Mar/2026 06:52:56] "GET /static/js/app.js HTTP/1.1" 200 -
+2026-03-31 06:52:56,760 - INFO - 127.0.0.1 - - [31/Mar/2026 06:52:56] "GET /socket.io/?EIO=4&transport=polling&t=Pr2ghGo HTTP/1.1" 200 -
+2026-03-31 06:52:56,771 - INFO - 127.0.0.1 - - [31/Mar/2026 06:52:56] "POST /socket.io/?EIO=4&transport=polling&t=Pr2ghG-&sid=5Tpv7EYXC64ysQ14AAAC HTTP/1.1" 200 -
+2026-03-31 06:52:56,776 - INFO - 127.0.0.1 - - [31/Mar/2026 06:52:56] "GET /socket.io/?EIO=4&transport=polling&t=Pr2ghH0&sid=5Tpv7EYXC64ysQ14AAAC HTTP/1.1" 200 -
+2026-03-31 06:52:56,782 - INFO - 127.0.0.1 - - [31/Mar/2026 06:52:56] "GET /socket.io/?EIO=4&transport=polling&t=Pr2ghHC&sid=5Tpv7EYXC64ysQ14AAAC HTTP/1.1" 200 -
+2026-03-31 06:53:05,218 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:53:05,300 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:53:05,383 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:53:05,466 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:53:07,375 - INFO - 127.0.0.1 - - [31/Mar/2026 06:53:07] "GET /socket.io/?EIO=4&transport=websocket&sid=5Tpv7EYXC64ysQ14AAAC HTTP/1.1" 200 -
+2026-03-31 06:53:15,550 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:53:15,632 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:53:15,714 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:53:15,797 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:53:25,908 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:53:26,013 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:53:26,121 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:53:26,220 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:53:36,303 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:53:36,385 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:53:36,468 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:53:36,550 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:53:46,637 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:53:46,720 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:53:46,802 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:53:46,884 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:53:56,987 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:53:57,070 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:53:57,152 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:53:57,237 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:54:07,321 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:54:07,405 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:54:07,486 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:54:07,568 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:54:17,653 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:54:17,735 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:54:17,817 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:54:17,900 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:54:27,984 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:54:28,064 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:54:28,148 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:54:28,231 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:54:38,313 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:54:38,395 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:54:38,477 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:54:38,560 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:54:48,645 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:54:48,728 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:54:48,812 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:54:48,895 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:54:58,996 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:54:59,080 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:54:59,162 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:54:59,243 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:55:09,327 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:55:09,410 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:55:09,492 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:55:09,576 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:55:19,661 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:55:19,744 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:55:19,827 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:55:19,910 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:55:30,023 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:55:30,138 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:55:30,256 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:55:30,369 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:55:40,454 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:55:40,536 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:55:40,619 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:55:40,701 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:55:50,842 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:55:50,934 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:55:51,016 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:55:51,098 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:55:51,100 - WARNING - Warning: Symbol DOGEUSDC not found on Binance. Please check if it is a valid USDC pair.
+2026-03-31 06:55:51,100 - WARNING - Warning: Symbol SOLUSDC not found on Binance. Please check if it is a valid USDC pair.
+2026-03-31 06:56:01,201 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:56:01,282 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:56:01,365 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:56:01,448 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:56:11,532 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:56:11,614 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:56:11,696 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:56:11,778 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:56:21,862 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:56:21,945 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:56:22,029 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:56:22,111 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:56:32,200 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:56:32,284 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:56:32,368 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:56:32,456 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:56:42,542 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:56:42,628 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:56:42,713 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:56:42,796 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:56:52,895 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:56:52,979 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:56:53,063 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:56:53,149 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:57:03,251 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:57:03,337 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:57:03,422 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:57:03,508 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:57:13,592 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:57:13,675 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:57:13,759 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:57:13,843 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:57:23,932 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:57:24,015 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:57:24,097 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:57:24,181 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:57:34,265 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:57:34,348 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:57:34,433 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:57:34,517 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:57:44,603 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:57:44,687 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:57:44,771 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:57:44,854 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:57:54,939 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:57:55,023 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:57:55,105 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:57:55,187 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:58:05,288 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:58:05,375 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:58:05,460 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:58:05,551 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:58:15,635 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:58:15,718 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:58:15,802 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:58:15,896 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:58:25,980 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:58:26,061 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:58:26,143 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:58:26,224 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:58:36,308 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:58:36,392 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:58:36,474 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:58:36,556 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:58:46,641 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:58:46,724 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:58:46,806 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:58:46,888 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:58:56,973 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:58:57,058 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:58:57,141 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:58:57,223 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:59:07,322 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:59:07,404 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:59:07,485 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:59:07,566 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:59:17,650 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:59:17,733 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:59:17,816 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:59:17,897 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:59:27,982 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:59:28,065 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:59:28,149 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:59:28,232 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:59:38,317 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:59:38,400 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:59:38,483 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:59:38,564 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:59:48,650 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:59:48,731 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:59:48,814 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:59:48,896 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:59:58,980 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:59:59,062 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:59:59,146 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 06:59:59,227 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 07:00:09,327 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 07:00:09,408 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 07:00:09,491 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 07:00:09,572 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 07:00:19,656 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 07:00:19,739 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 07:00:19,822 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 07:00:19,904 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 07:00:29,987 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 07:00:30,068 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 07:00:30,149 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 07:00:30,232 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 07:00:40,316 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 07:00:40,399 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 07:00:40,480 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 07:00:40,561 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 07:00:50,646 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 07:00:50,730 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 07:00:50,819 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 07:00:50,899 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 07:01:00,984 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 07:01:01,067 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 07:01:01,148 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 07:01:01,231 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 07:01:01,233 - WARNING - Warning: Symbol DOGEUSDC not found on Binance. Please check if it is a valid USDC pair.
+2026-03-31 07:01:01,233 - WARNING - Warning: Symbol SOLUSDC not found on Binance. Please check if it is a valid USDC pair.
+2026-03-31 07:01:11,333 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 07:01:11,416 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 07:01:11,497 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 07:01:11,578 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 07:01:21,662 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 07:01:21,743 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 07:01:21,825 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 07:01:21,906 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 07:01:31,990 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 07:01:32,072 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 07:01:32,156 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 07:01:32,238 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 12:11:29,156 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 12:11:29,258 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 12:11:29,345 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 12:11:29,431 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 12:11:29,437 - WARNING - Warning: Symbol DOGEUSDC not found on Binance. Please check if it is a valid USDC pair.
+2026-03-31 12:11:29,437 - WARNING - Warning: Symbol SOLUSDC not found on Binance. Please check if it is a valid USDC pair.
+2026-03-31 12:11:39,525 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 12:11:39,609 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 12:11:39,693 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 12:11:39,774 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 12:11:49,932 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 12:11:50,030 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 12:11:50,123 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 12:11:50,210 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 12:12:00,344 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 12:12:00,435 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 12:12:00,531 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 12:12:00,623 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 12:12:10,711 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 12:12:10,813 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 12:12:10,897 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 12:12:10,982 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 12:12:21,066 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 12:12:21,152 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 12:12:21,236 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 12:12:21,324 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 12:12:31,435 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 12:12:31,520 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 12:12:31,604 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 12:12:31,689 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 12:12:41,774 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 12:12:41,857 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 12:12:41,952 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 12:12:42,037 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 12:12:52,126 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 12:12:52,210 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 12:12:52,293 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 12:12:52,383 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 12:13:02,469 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 12:13:02,556 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 12:13:02,648 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 12:13:02,739 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 12:13:12,846 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 12:13:12,955 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 12:13:13,066 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 12:13:13,173 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 12:13:23,261 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 12:13:23,346 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 12:13:23,434 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 12:13:23,520 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 12:13:33,621 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 12:13:33,704 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 12:13:33,786 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 12:13:33,867 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 12:13:43,950 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 12:13:44,036 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 12:13:44,116 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 12:13:44,200 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 12:13:54,284 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 12:13:54,367 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 12:13:54,449 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.
+2026-03-31 12:13:54,532 - ERROR - CRITICAL: Restricted location detected. Cannot create Binance client.

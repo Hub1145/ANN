@@ -942,14 +942,21 @@ function setupSocketListeners() {
         (data.positions || []).forEach(p => {
             if (p.trades && p.trades.length > 0) {
                 p.trades.forEach(t => {
+                    const isFilled = t.filled || t.amount > 0;
+                    const displayAmount = isFilled ? t.amount : `(${t.amount || 0})`;
+                    const rowClass = isFilled ? "" : "opacity-50";
+                    const isExternal = t.trade_id === 'External';
+                    const badgeClass = isExternal ? 'bg-warning text-dark' : 'bg-secondary';
+                    const pnl = isFilled ? (t.pnl || 0) : 0;
+
                     rows.push(`
-                        <tr class="border-0">
+                        <tr class="border-0 ${rowClass}">
                             <td>${p.account}</td>
-                            <td>${p.symbol} <span class="badge bg-secondary smaller">${t.trade_id}</span></td>
-                            <td class="${p.amount > 0 ? 'text-success' : 'text-danger'}">${t.amount || p.amount}</td>
+                            <td>${p.symbol} <span class="badge ${badgeClass} smaller">${t.trade_id}</span></td>
+                            <td class="${p.amount > 0 ? 'text-success' : 'text-danger'}">${displayAmount}</td>
                             <td>${(parseFloat(t.entry_price || p.entryPrice) || 0).toFixed(2)}</td>
-                            <td class="${p.unrealizedProfit >= 0 ? 'text-success' : 'text-danger'}">${(parseFloat(p.unrealizedProfit) || 0).toFixed(2)}</td>
-                            <td><button class="btn btn-xs btn-outline-danger py-0" onclick="closePosition(${p.account_idx}, '${p.symbol}', '${t.trade_id}')">Kill</button></td>
+                            <td class="${pnl >= 0 ? 'text-success' : 'text-danger'}">${pnl.toFixed(2)}</td>
+                            <td><button class="btn btn-xs btn-outline-danger py-0" onclick="closePosition(${p.account_idx}, '${p.symbol}', ${isExternal ? 'null' : `'${t.trade_id}'` })">Kill</button></td>
                         </tr>
                     `);
                 });
