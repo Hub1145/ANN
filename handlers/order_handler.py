@@ -9,6 +9,37 @@ class OrderHandler:
         self.engine = engine
         self.recent_client_ids = {} # (account_index, symbol) -> { client_id: timestamp }
 
+    def place_stop_order(self, idx, symbol, side, stop_price, qty=None, client_id=None, close_position=True):
+        target_client = self.engine.accounts[idx]['client'] if idx in self.engine.accounts else self.engine.bg_clients.get(idx, {}).get('client')
+        if not target_client: return None
+
+        acc_name = self.engine.accounts[idx]['info'].get('name') if idx in self.engine.accounts else self.engine.bg_clients.get(idx, {}).get('name', str(idx))
+
+        try:
+            params = {
+                'symbol': symbol,
+                'side': side,
+                'type': Client.FUTURE_ORDER_TYPE_STOP_MARKET,
+                'stopPrice': self.format_price(symbol, stop_price),
+                'closePosition': 'true' if close_position else 'false'
+            }
+            if not close_position and qty:
+                params['quantity'] = self.format_quantity(symbol, qty)
+            if client_id: params['newClientOrderId'] = client_id
+
+            self.engine.log("placing_stop_order", account_name=acc_name, is_key=True, symbol=symbol, side=side, stop_price=params['stopPrice'])
+            order = self.engine.safe_api_call(target_client.futures_create_order, **params)
+            return order['orderId']
+        except BinanceAPIException as e:
+            if e.code == -2022:
+                if client_id: self.engine.trailing_state[(idx, symbol, client_id)] = 'REJECTED_REDUCE_ONLY'
+            else:
+                self.engine.log("stop_order_failed", level='error', account_name=acc_name, is_key=True, error=str(e))
+            return None
+        except Exception as e:
+            self.engine.log("stop_order_failed", level='error', account_name=acc_name, is_key=True, error=str(e))
+            return None
+
     def place_limit_order(self, idx, symbol, side, qty, price, client_id=None, reduce_only=False):
         target_client = self.engine.accounts[idx]['client'] if idx in self.engine.accounts else self.engine.bg_clients.get(idx, {}).get('client')
         if not target_client: return None

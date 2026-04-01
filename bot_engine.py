@@ -137,7 +137,7 @@ class BinanceTradingBotEngine:
             api_key, api_secret = acc.get('api_key', '').strip(), acc.get('api_secret', '').strip()
             if api_key and api_secret:
                 # Reuse existing TWM/Client if key hasn't changed to avoid redundant connections
-                if i in self.bg_clients and self.bg_clients[i].get('info', {}).get('api_key') == api_key:
+                if i in self.bg_clients and self.bg_clients[i].get('info', {}).get('api_key') == api_key and self.bg_clients[i].get('client') is not None:
                     self.bg_clients[i]['name'] = acc.get('name', f"Account {i+1}")
                     self.bg_clients[i]['info'] = acc
                     continue
@@ -387,9 +387,10 @@ class BinanceTradingBotEngine:
     @staticmethod
     def test_account(api_key, api_secret, is_demo=True):
         try:
-            client = Client(api_key.strip(), api_secret.strip(), testnet=is_demo, requests_params={'timeout': 20})
+            # Set a more generous timeout for testing connection to avoid false negatives
+            client = Client(api_key.strip(), api_secret.strip(), testnet=is_demo, requests_params={'timeout': 30})
             if is_demo: client.FUTURES_URL = 'https://testnet.binancefuture.com/fapi'
             else: client.FUTURES_URL = 'https://fapi.binance.com/fapi'
-            client.futures_account_balance()
+            client.futures_time() # Faster health check than balance
             return True, "Connection successful"
         except Exception as e: return False, str(e)

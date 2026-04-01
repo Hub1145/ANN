@@ -80,6 +80,8 @@ class StrategyHandler:
                         'quantity': actual_qty, 'avg_entry_price': actual_price, 'levels': {}
                     })
 
+                    # Immediate TP/SL
+                    self.setup_sl_logic(idx, symbol, actual_price, trade_id, override_strategy=strategy)
                     if strategy.get('tp_enabled', True):
                         self.setup_tp_targets_logic(idx, symbol, actual_price, strategy.get('tp_targets', []), actual_qty, strategy.get('direction', 'LONG'), strategy.get('trailing_tp_enabled', False), trade_id, override_strategy=strategy)
                 return
@@ -93,6 +95,7 @@ class StrategyHandler:
     def _execute_market_entry(self, idx, symbol, trade_id, override_strategy=None):
         strategy = override_strategy or self.engine.config_handler.get_strategy(symbol)
         price = self.engine.market_handler.get_price(symbol)
+        if price <= 0: return
         qty = (float(strategy.get('trade_amount_usdc', 10)) * int(strategy.get('leverage', 20))) / price
 
         client = self.engine.accounts[idx]['client']
@@ -107,10 +110,13 @@ class StrategyHandler:
             actual_price = float(order.get('avgPrice', price)) or price
 
             self.engine.grid_state[(idx, symbol)].append({
-                'trade_id': trade_id, 'initial_filled': False, 'initial_order_id': oid,
-                'initial_orders': {oid: {'qty': actual_qty, 'price': actual_price, 'filled': False}},
+                'trade_id': trade_id, 'initial_filled': True, 'initial_order_id': oid,
+                'initial_orders': {oid: {'qty': actual_qty, 'price': actual_price, 'filled': True}},
                 'quantity': actual_qty, 'avg_entry_price': actual_price, 'levels': {}
             })
+
+            # Immediate TP/SL
+            self.setup_sl_logic(idx, symbol, actual_price, trade_id, override_strategy=strategy)
             if strategy.get('tp_enabled', True):
                 self.setup_tp_targets_logic(idx, symbol, actual_price, strategy.get('tp_targets', []), actual_qty, strategy.get('direction', 'LONG'), strategy.get('trailing_tp_enabled', False), trade_id, override_strategy=strategy)
 
@@ -124,14 +130,16 @@ class StrategyHandler:
         if order_id:
             with self.engine.data_lock:
                 if (idx, symbol) not in self.engine.grid_state: self.engine.grid_state[(idx, symbol)] = []
-                # Check if TP is enabled and not in market mode.
-                # If so, we'll mark this trade as needing a TP grid once it fills,
-                # since reduceOnly=True orders are rejected if there's no open position yet.
+                # Immediate setup for SL/TP (even if pending fill)
                 self.engine.grid_state[(idx, symbol)].append({
                     'trade_id': trade_id, 'initial_filled': False, 'initial_order_id': order_id,
                     'quantity': qty, 'avg_entry_price': price, 'levels': {},
-                    'pending_tp_grid': strategy.get('tp_enabled', True) and not strategy.get('tp_market_mode', False)
+                    'pending_tp_grid': strategy.get('tp_enabled', True)
                 })
+                # Immediate SL (REDUCE_ONLY might fail but we'll retry in worker)
+                self.setup_sl_logic(idx, symbol, price, trade_id, override_strategy=strategy)
+                if strategy.get('tp_enabled', True):
+                    self.setup_tp_targets_logic(idx, symbol, price, strategy.get('tp_targets', []), qty, strategy.get('direction', 'LONG'), strategy.get('trailing_tp_enabled', False), trade_id, override_strategy=strategy)
 
     def trailing_tp_logic(self, idx, symbol):
         strategy = self.engine.config_handler.get_strategy(symbol)
@@ -183,29 +191,60 @@ class StrategyHandler:
         to_exec = []
         with self.engine.data_lock:
             for t in self.engine.grid_state.get((idx, symbol), []):
+                # Ensure we don't spam setup if already in progress or recent failure
+                recent_tp_setup = time.time() - t.get('last_tp_setup_attempt', 0) < 5
+
                 for lid, lvl in t.get('levels', {}).items():
                     if not lvl.get('tp_order_id') and not lvl.get('filled') and lvl.get('is_market'):
                         triggered = (strategy.get('direction') == 'LONG' and price >= lvl['price']) or (strategy.get('direction') == 'SHORT' and price <= lvl['price'])
                         if triggered: to_exec.append((t['trade_id'], lid, lvl['qty'], lvl['side']))
+
+                    # Proactive: If TP order is missing and not market mode, try to place it
+                    if not lvl.get('tp_order_id') and not lvl.get('filled') and not lvl.get('is_market') and not recent_tp_setup:
+                         t['last_tp_setup_attempt'] = time.time()
+                         self.setup_tp_targets_logic(idx, symbol, t['avg_entry_price'], strategy.get('tp_targets', []), t['quantity'], strategy.get('direction', 'LONG'), strategy.get('trailing_tp_enabled', False), t['trade_id'], override_strategy=strategy)
+
         for tid, lid, qty, side in to_exec:
             if self.engine.close_position(idx, symbol, trade_id=tid, order_type='MARKET'):
                 with self.engine.data_lock:
                     s = next((t for t in self.engine.grid_state.get((idx, symbol), []) if t['trade_id'] == tid), None)
                     if s: s['levels'][lid]['filled'] = True
 
+    def setup_sl_logic(self, idx, symbol, entry_price, trade_id, override_strategy=None):
+        strategy = override_strategy or self.engine.config_handler.get_strategy(symbol)
+        if not strategy.get('stop_loss_enabled'): return
+
+        sl_price = float(strategy.get('stop_loss_price', 0))
+        if sl_price <= 0: return
+
+        # Determine side for SL
+        direction = strategy.get('direction', 'LONG')
+        side = 'SELL' if direction == 'LONG' else 'BUY'
+
+        # Place STOP_MARKET with closePosition=True
+        client_id = f"trd-{trade_id}-sl"
+        with self.engine.data_lock:
+            trades = self.engine.grid_state.get((idx, symbol), [])
+            t = next((tr for tr in trades if tr['trade_id'] == trade_id), None)
+            if not t: return
+            if t.get('sl_order_id'): return # Already placed
+
+        order_id = self.engine.order_handler.place_stop_order(idx, symbol, side, sl_price, client_id=client_id, close_position=True)
+        if order_id:
+            with self.engine.data_lock:
+                t['sl_order_id'] = order_id
+
     def stop_loss_logic(self, idx, symbol):
+        # Stop loss is now handled by Binance STOP_MARKET orders placed in setup_sl_logic
+        # We only need to ensure they stay placed
         strategy = self.engine.config_handler.get_strategy(symbol)
         if not strategy.get('stop_loss_enabled'): return
-        price = self.engine.market_handler.get_price(symbol)
-        if price <= 0: return
-        sl_price = float(strategy.get('stop_loss_price', 0))
-        to_close = []
+
         with self.engine.data_lock:
             for t in self.engine.grid_state.get((idx, symbol), []):
-                if not t.get('initial_filled'): continue
-                triggered = (strategy.get('direction') == 'LONG' and price <= sl_price) or (strategy.get('direction') == 'SHORT' and price >= sl_price)
-                if triggered: to_close.append(t['trade_id'])
-        for tid in to_close: self.engine.close_position(idx, symbol, trade_id=tid, order_type=strategy.get('sl_type', 'MARKET'))
+                if not t.get('sl_order_id'):
+                    # Immediate setup (retry if it failed previously or was cancelled)
+                    self.setup_sl_logic(idx, symbol, t['avg_entry_price'], t['trade_id'], override_strategy=strategy)
 
     def trailing_buy_logic(self, idx, symbol):
         strategy = self.engine.config_handler.get_strategy(symbol)
