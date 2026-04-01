@@ -775,7 +775,7 @@ class BinanceTradingBotEngine:
                         'initial_order_id': 'GRID_PENDING',
                         'initial_orders': {},
                         'avg_entry_price': entry_price, # Base price for grid
-                        'quantity': 0.0,
+                        'quantity': quantity, # Track total quantity intended for grid
                         'levels': {},
                         'consolidated_tp_id': None
                     }
@@ -1135,8 +1135,12 @@ class BinanceTradingBotEngine:
             if is_initial_fill:
                 state['initial_filled'] = True
                 if 'initial_orders' not in state: state['initial_orders'] = {}
+                # Update with actual filled quantity and price
                 state['initial_orders'][order_id] = {'qty': filled_qty, 'price': avg_price, 'filled': True}
                 
+                # If it's a MARKET order, the original quantity might have been an estimate
+                # and the orderId is now matched.
+
                 # Update total quantity
                 filled_entries = [o for o in state['initial_orders'].values() if o.get('filled')]
                 total_filled_qty = sum(o['qty'] for o in filled_entries)
@@ -1765,7 +1769,8 @@ class BinanceTradingBotEngine:
                     # Check for external portion
                     total_qty_pa = abs(float(p_copy.get('amount') or 0))
                     diff_qty = total_qty_pa - tracked_qty
-                    if diff_qty > 1e-6:
+                    # Floating point precision check: if difference is less than 0.001% of total, assume it's the same
+                    if diff_qty > 1e-4 and (diff_qty / total_qty_pa) > 1e-5:
                         total_avg = float(p_copy.get('entryPrice') or 0)
                         total_notional_val = total_avg * total_qty_pa
                         ext_notional = total_notional_val - tracked_notional
@@ -2472,7 +2477,9 @@ class BinanceTradingBotEngine:
                         if new_id:
                             with self.data_lock:
                                 trade['initial_order_id'] = new_id
+                                trade['initial_orders'] = {new_id: {'qty': quantity, 'price': order_price, 'filled': False}}
                                 trade['quantity'] = quantity
+                                trade['avg_entry_price'] = order_price
 
                             # IMMEDIATELY PLACE TP GRID (Production Ready: Don't wait for fill)
                             if strategy.get('tp_enabled', True):
@@ -2511,6 +2518,17 @@ class BinanceTradingBotEngine:
         try:
             self.log("executing_market_entry", account_name=self.accounts[idx]['info'].get('name'), is_key=True, symbol=symbol, direction=direction)
             
+            client_id = f"trd-{trade_id}-entry"
+            order = self._safe_api_call(self.accounts[idx]['client'].futures_create_order,
+                symbol=symbol,
+                side=side,
+                type=Client.FUTURE_ORDER_TYPE_MARKET,
+                quantity=self._format_quantity(symbol, quantity),
+                newClientOrderId=client_id
+            )
+
+            order_id = order.get('orderId')
+
             # Ensure trade state exists for tracking fill
             with self.data_lock:
                 if (idx, symbol) not in self.grid_state:
@@ -2519,20 +2537,12 @@ class BinanceTradingBotEngine:
                 new_trade = {
                     'trade_id': trade_id,
                     'initial_filled': False,
+                    'initial_order_id': order_id,
+                    'initial_orders': {order_id: {'qty': quantity, 'price': current_price, 'filled': False}},
                     'quantity': quantity,
                     'levels': {}
                 }
                 self.grid_state[(idx, symbol)].append(new_trade)
-
-            client_id = f"trd-{trade_id}-entry"
-            # We use market order for trailing buy trigger
-            order = self._safe_api_call(self.accounts[idx]['client'].futures_create_order,
-                symbol=symbol,
-                side=side,
-                type=Client.FUTURE_ORDER_TYPE_MARKET,
-                quantity=self._format_quantity(symbol, quantity),
-                newClientOrderId=client_id
-            )
 
             # IMMEDIATELY PLACE TP GRID (Production Ready: Don't wait for fill)
             if strategy.get('tp_enabled', True):
