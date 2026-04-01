@@ -77,33 +77,32 @@ class BinanceTradingBotEngine:
 
     def _create_client(self, api_key, api_secret):
         testnet = self.config_handler.config.get('is_demo', True)
-        # Check if we should skip due to recent failures to avoid spamming logs during maintenance
-        last_fail = self.last_log_times.get('client_creation_fail', 0)
-        if time.time() - last_fail < 30: return None
+        # Rate-limit client creation attempts only for global service failures (502, HTML)
+        last_global_fail = self.last_log_times.get('client_creation_fail_global', 0)
+        if time.time() - last_global_fail < 10: return None
 
         try:
-            client = Client(api_key.strip(), api_secret.strip(), testnet=testnet, requests_params={'timeout': 10})
+            # Increased timeout to 20s to be more resilient to slow responses
+            client = Client(api_key.strip(), api_secret.strip(), testnet=testnet, requests_params={'timeout': 20})
             if testnet:
                 client.FUTURES_URL = 'https://testnet.binancefuture.com/fapi'
             else:
                 client.FUTURES_URL = 'https://fapi.binance.com/fapi'
-            try:
-                res = client.futures_time()
-                client.timestamp_offset = res['serverTime'] - int(time.time() * 1000)
-            except: pass
+
+            # Simple health check call during creation
+            client.futures_time()
             return client
         except Exception as e:
             msg = str(e)
             if "restricted location" in msg.lower():
                 logging.error("CRITICAL: Restricted location detected. Cannot create Binance client.")
-            elif "502" in msg or "<html>" in msg:
-                # Log only once every 60 seconds for gateway errors
-                if time.time() - last_fail > 60:
-                    logging.error("Binance API is currently unavailable (502 Bad Gateway). Retrying in background...")
-                    self.last_log_times['client_creation_fail'] = time.time()
+                self.last_log_times['client_creation_fail_global'] = time.time() # This is likely an IP issue, block retries
+            elif "502" in msg or "<html>" in msg or "timeout" in msg.lower():
+                if time.time() - last_global_fail > 60:
+                    logging.error(f"Binance API is temporarily unavailable (502/HTML/Timeout: {msg[:50]}). Retrying in background...")
+                    self.last_log_times['client_creation_fail_global'] = time.time()
             else:
                 logging.error(f"Error creating Binance client: {e}")
-                self.last_log_times['client_creation_fail'] = time.time()
             return None
 
     @property
@@ -128,11 +127,13 @@ class BinanceTradingBotEngine:
         from binance.streams import ThreadedWebsocketManager
         import asyncio
 
-        # Rate limit background client creation to avoid spamming 502/HTML errors
-        last_fail = self.last_log_times.get('client_creation_fail', 0)
-        if time.time() - last_fail < 30: return
-
         for i, acc in enumerate(api_accounts):
+            if not acc.get('enabled', True):
+                if i in self.bg_clients:
+                    self.market_handler._stop_twm(self.bg_clients[i].get('twm'))
+                    del self.bg_clients[i]
+                continue
+
             api_key, api_secret = acc.get('api_key', '').strip(), acc.get('api_secret', '').strip()
             if api_key and api_secret:
                 # Reuse existing TWM/Client if key hasn't changed to avoid redundant connections
@@ -212,6 +213,9 @@ class BinanceTradingBotEngine:
     def _global_background_worker(self):
         while not self.stop_event.is_set():
             try:
+                # Ensure all enabled background clients are initialized
+                self._initialize_bg_clients()
+
                 symbols = self.config_handler.config.get('symbols', [])
                 # Market data polling as fallback
                 for s in symbols:

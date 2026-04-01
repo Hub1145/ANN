@@ -17,7 +17,13 @@ class AccountHandler:
         if not acc:
             acc = self.engine.bg_clients.get(idx)
 
-        if not acc: return
+        if not acc:
+            # If enabled but no client, report as initializing/failed
+            api_accounts = self.engine.config_handler.config.get('api_accounts', [])
+            if 0 <= idx < len(api_accounts) and api_accounts[idx].get('enabled', True):
+                self.account_errors[idx] = "Initializing or Binance API temporarily unavailable (502/HTML)..."
+                self.emit_account_update()
+            return
         client = acc['client']
 
         try:
