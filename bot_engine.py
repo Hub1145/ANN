@@ -1420,6 +1420,12 @@ class BinanceTradingBotEngine:
                         logging.debug(f"Level {o['level']} for {symbol} (Trade {trade_id}) marked for retry.")
                         continue
 
+                    # NEW: If it's NOT a Market level, we SHOULD NOT mark as filled if placement failed.
+                    # This prevents falling back to market execution prematurely for limit orders.
+                    if not o.get('is_market'):
+                        logging.debug(f"Level {o['level']} placement failed for {symbol}. Will NOT fallback to market.")
+                        continue
+
                 if order_id:
                     with self.data_lock:
                         if (idx, symbol) in self.grid_state:
@@ -2004,7 +2010,7 @@ class BinanceTradingBotEngine:
 
             return {"success": True}
 
-    def close_position(self, account_idx, symbol, trade_id=None):
+    def close_position(self, account_idx, symbol, trade_id=None, order_type=Client.FUTURE_ORDER_TYPE_MARKET):
         """Closes a position. If trade_id is provided, only closes that specific trade's portion."""
         # Find the index for account_idx if it's a name
         idx = None
@@ -2061,7 +2067,19 @@ class BinanceTradingBotEngine:
                 if qty_to_close > 0:
                     direction = strategy.get('direction', 'LONG') if strategy else 'LONG'
                     side = Client.SIDE_SELL if direction == 'LONG' else Client.SIDE_BUY
-                    self._execute_market_close_partial(idx, symbol, qty_to_close, side)
+
+                    if order_type == Client.FUTURE_ORDER_TYPE_LIMIT:
+                        price = float(strategy.get('sl_order_price') or strategy.get('stop_loss_price') or 0)
+                        if price <= 0:
+                            with self.market_data_lock:
+                                price = float(self.shared_market_data.get(symbol, {}).get('price') or 0)
+
+                        if price > 0:
+                            self._place_limit_order(idx, symbol, side, qty_to_close, price, reduce_only=True)
+                        else:
+                            self._execute_market_close_partial(idx, symbol, qty_to_close, side)
+                    else:
+                        self._execute_market_close_partial(idx, symbol, qty_to_close, side)
 
                 # Step 3: Remove trade from state under the lock, then emit update
                 with self.data_lock:
@@ -2535,7 +2553,7 @@ class BinanceTradingBotEngine:
                     self.grid_state[(idx, symbol)] = [t for t in self.grid_state[(idx, symbol)] if t.get('trade_id') != trade_id]
 
     def _tp_market_logic(self, idx, symbol):
-        """Monitors price for manual market TP execution."""
+        """Monitors price for Take Profit execution if set to Market mode or as a fallback for unplaced Limit orders."""
         with self.market_data_lock:
             current_price = float(self.shared_market_data.get(symbol, {}).get('price') or 0)
         
@@ -2561,7 +2579,9 @@ class BinanceTradingBotEngine:
                 trade_id = trade.get('trade_id', 'auto')
 
                 for lvl_idx, lvl in list(levels.items()):
-                    if not lvl.get('tp_order_id') and not lvl.get('filled') and not lvl.get('trailing_eligible'):
+                    # Only trigger if it's explicitly MARKET mode OR if it's a fallback for an UNPLACED limit order
+                    # trailing_eligible targets are handled by _trailing_tp_logic
+                    if not lvl.get('tp_order_id') and not lvl.get('filled') and not lvl.get('trailing_eligible') and lvl.get('is_market'):
                         target_price = lvl['price']
                         triggered = False
                         if direction == 'LONG':
@@ -2704,13 +2724,14 @@ class BinanceTradingBotEngine:
                         if elapsed < timeout_sec:
                             continue # Still waiting
                     
-                    self.log("stop_loss_triggered", account_name=acc_name, is_key=True, symbol=symbol, price=current_price)
+                    sl_type = strategy.get('sl_type', 'COND_MARKET')
+                    self.log("stop_loss_triggered", account_name=acc_name, is_key=True, symbol=symbol, price=current_price, type=sl_type)
                     trade['initial_filled'] = False
                     # Clean up trigger time
                     trigger_key = (idx, symbol, trade_id, 'sl_trigger_time')
                     if trigger_key in self.trailing_state: del self.trailing_state[trigger_key]
                     
-                    to_close.append(trade_id)
+                    to_close.append((trade_id, sl_type))
                 else:
                     # Price recovered, reset timeout if any
                     trigger_key = (idx, symbol, trade_id, 'sl_trigger_time')
@@ -2718,8 +2739,10 @@ class BinanceTradingBotEngine:
                         del self.trailing_state[trigger_key]
                         self.log("sl_timeout_reset", account_name=acc_name, is_key=False)
 
-        for tid in to_close:
-            self.close_position(acc_name, symbol, trade_id=tid)
+        for tid, sl_type in to_close:
+            # Handle Limit vs Market closure for SL
+            order_type = Client.FUTURE_ORDER_TYPE_LIMIT if sl_type == 'COND_LIMIT' else Client.FUTURE_ORDER_TYPE_MARKET
+            self.close_position(acc_name, symbol, trade_id=tid, order_type=order_type)
 
     def _trailing_tp_logic(self, idx, symbol):
         strategy = self._get_strategy(idx, symbol)
