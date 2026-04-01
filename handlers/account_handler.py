@@ -26,16 +26,35 @@ class AccountHandler:
             if force or time.time() - acc.get('last_balance_update', 0) > balance_throttle:
                 acc['last_balance_update'] = time.time()
                 balances = self.engine.safe_api_call(client.futures_account_balance)
-                usdc_balance = 0.0
+
+                total_wallet_balance = 0.0
+                if not hasattr(self, 'per_asset_balances'):
+                    self.per_asset_balances = {}
+                if idx not in self.per_asset_balances:
+                    self.per_asset_balances[idx] = {}
+
                 if balances:
                     for b in balances:
-                        if b['asset'] == 'USDC':
-                            usdc_balance = float(b.get('balance') or 0)
-                            break
+                        asset = b.get('asset')
+                        bal = float(b.get('balance') or 0)
+                        self.per_asset_balances[idx][asset] = bal
+                        # Sum all assets for a total USD-equivalent wallet balance (USDT, USDC, etc)
+                        total_wallet_balance += bal
 
                 with self.engine.data_lock:
-                    self.account_balances[idx] = usdc_balance
+                    self.account_balances[idx] = total_wallet_balance
                     self.account_last_update[idx] = time.time()
+                    # Clear any previous generic API errors if we successfully fetched data
+                    if idx in self.account_errors and "Restricted" not in self.account_errors[idx]:
+                        del self.account_errors[idx]
+
+                # Detection: If balance is 0 but account is supposed to be active, log a warning
+                if total_wallet_balance == 0 and idx in self.engine.accounts:
+                    log_key = f"zero_balance_{idx}"
+                    if time.time() - self.engine.last_log_times.get(log_key, 0) > 300:
+                        acc_name = acc.get('name') or acc.get('info', {}).get('name') or f"Account {idx+1}"
+                        self.engine.log(f"Balance for {acc_name} is 0.00. Please ensure you have funds (USDC/USDT) in your Futures wallet.", level='warning', account_name=acc_name)
+                        self.engine.last_log_times[log_key] = time.time()
 
             # Positions (Weight 5) - Update every 10s unless forced (WebSocket is primary)
             pos_throttle = 10 if idx in self.engine.accounts else 30
@@ -92,6 +111,7 @@ class AccountHandler:
                 logging.error(f"Error updating metrics for account {idx}: {e}")
         except Exception as e:
             logging.error(f"Error updating metrics for account {idx}: {e}")
+            self.account_errors[idx] = str(e)
 
     def emit_account_update(self):
         with self.engine.data_lock:
