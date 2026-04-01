@@ -76,8 +76,12 @@ class BinanceTradingBotEngine:
         return func(*args, **kwargs)
 
     def _create_client(self, api_key, api_secret):
+        testnet = self.config_handler.config.get('is_demo', True)
+        # Check if we should skip due to recent failures to avoid spamming logs during maintenance
+        last_fail = self.last_log_times.get('client_creation_fail', 0)
+        if time.time() - last_fail < 30: return None
+
         try:
-            testnet = self.config_handler.config.get('is_demo', True)
             client = Client(api_key.strip(), api_secret.strip(), testnet=testnet, requests_params={'timeout': 10})
             if testnet:
                 client.FUTURES_URL = 'https://testnet.binancefuture.com/fapi'
@@ -89,10 +93,17 @@ class BinanceTradingBotEngine:
             except: pass
             return client
         except Exception as e:
-            if "restricted location" in str(e).lower():
+            msg = str(e)
+            if "restricted location" in msg.lower():
                 logging.error("CRITICAL: Restricted location detected. Cannot create Binance client.")
+            elif "502" in msg or "<html>" in msg:
+                # Log only once every 60 seconds for gateway errors
+                if time.time() - last_fail > 60:
+                    logging.error("Binance API is currently unavailable (502 Bad Gateway). Retrying in background...")
+                    self.last_log_times['client_creation_fail'] = time.time()
             else:
                 logging.error(f"Error creating Binance client: {e}")
+                self.last_log_times['client_creation_fail'] = time.time()
             return None
 
     @property
@@ -116,6 +127,10 @@ class BinanceTradingBotEngine:
         testnet = self.config_handler.config.get('is_demo', True)
         from binance.streams import ThreadedWebsocketManager
         import asyncio
+
+        # Rate limit background client creation to avoid spamming 502/HTML errors
+        last_fail = self.last_log_times.get('client_creation_fail', 0)
+        if time.time() - last_fail < 30: return
 
         for i, acc in enumerate(api_accounts):
             api_key, api_secret = acc.get('api_key', '').strip(), acc.get('api_secret', '').strip()
