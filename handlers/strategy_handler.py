@@ -89,7 +89,7 @@ class StrategyHandler:
             if strategy.get('entry_type') == 'MARKET':
                 self._execute_market_entry(idx, symbol, trade_id, override_strategy=strategy)
             elif strategy.get('entry_type') == 'LIMIT':
-                limit_p = float(strategy.get('entry_limit_price', price))
+                limit_p = float(strategy.get('entry_price', price))
                 self._execute_limit_entry(idx, symbol, limit_p, trade_id, override_strategy=strategy)
 
     def _execute_market_entry(self, idx, symbol, trade_id, override_strategy=None):
@@ -122,6 +122,8 @@ class StrategyHandler:
 
     def _execute_limit_entry(self, idx, symbol, price, trade_id, override_strategy=None):
         strategy = override_strategy or self.engine.config_handler.get_strategy(symbol)
+        # Use entry_price from strategy if available
+        price = float(strategy.get('entry_price', price))
         qty = (float(strategy.get('trade_amount_usdc', 10)) * int(strategy.get('leverage', 20))) / price
 
         side = 'BUY' if strategy.get('direction', 'LONG') == 'LONG' else 'SELL'
@@ -172,7 +174,7 @@ class StrategyHandler:
                     else:
                         if price < lvl['best_price']: lvl['best_price'] = price
 
-                    callback_pct = float(strategy.get('trailing_tp_callback', 0.1)) / 100.0
+                    callback_pct = float(strategy.get('trailing_deviation', 0.5)) / 100.0
                     triggered = False
                     if direction == 'LONG':
                         if price <= lvl['best_price'] * (1 - callback_pct): triggered = True
@@ -257,9 +259,11 @@ class StrategyHandler:
             if len(self.engine.grid_state.get((idx, symbol), [])) > 0: return
             state = self.engine.trailing_state.get((idx, symbol), {})
             if not state:
-                act_p = float(strategy.get('trailing_buy_activation', 0))
+                # Activation price for trailing buy is the entry_price
+                act_p = float(strategy.get('entry_price', 0))
                 direction = strategy.get('direction', 'LONG')
-                activated = (direction == 'LONG' and price <= act_p) or (direction == 'SHORT' and price >= act_p)
+                # If entry_price is 0, activate immediately
+                activated = (act_p == 0) or (direction == 'LONG' and price <= act_p) or (direction == 'SHORT' and price >= act_p)
                 if activated:
                     self.engine.trailing_state[(idx, symbol)] = {'best_price': price, 'activated': True}
                     self.engine.log("trailing_buy_activated", account_name=self.engine.accounts[idx]['info'].get('name'), is_key=True, symbol=symbol, price=price)
@@ -270,7 +274,7 @@ class StrategyHandler:
                 else:
                     if price > state['best_price']: state['best_price'] = price
 
-                callback = float(strategy.get('trailing_buy_callback', 0.1)) / 100.0
+                callback = float(strategy.get('trailing_buy_deviation', 1.0)) / 100.0
                 triggered = (direction == 'LONG' and price >= state['best_price'] * (1 + callback)) or \
                             (direction == 'SHORT' and price <= state['best_price'] * (1 - callback))
                 if triggered:
@@ -286,14 +290,15 @@ class StrategyHandler:
         if price <= 0: return
         with self.engine.data_lock:
             if len(self.engine.grid_state.get((idx, symbol), [])) > 0: return
-            cond_p = float(strategy.get('conditional_price', 0))
+            # Use entry_price for conditional trigger
+            cond_p = float(strategy.get('entry_price', 0))
             direction = strategy.get('direction', 'LONG')
             triggered = (direction == 'LONG' and price >= cond_p) or (direction == 'SHORT' and price <= cond_p)
             if triggered:
                 if strategy.get('entry_type') in ['COND_MARKET', 'CONDITIONAL']:
                     self._execute_market_entry(idx, symbol, trade_id=f"cond-{int(time.time())}")
                 else:
-                    limit_p = float(strategy.get('entry_limit_price', price))
+                    limit_p = float(strategy.get('entry_price', price))
                     self._execute_limit_entry(idx, symbol, limit_p, trade_id=f"cond-{int(time.time())}")
 
     def setup_tp_targets_logic(self, idx, symbol, entry_price, targets, total_qty, direction, trailing_tp_enabled=False, trade_id=None, override_strategy=None):
