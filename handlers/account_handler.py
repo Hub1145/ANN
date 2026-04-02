@@ -70,7 +70,7 @@ class AccountHandler:
                     log_key = f"zero_balance_{idx}"
                     if time.time() - self.engine.last_log_times.get(log_key, 0) > 300:
                         acc_name = acc.get('name') or acc.get('info', {}).get('name') or f"Account {idx+1}"
-                        self.engine.log(f"Balance for {acc_name} is 0.00. Please ensure you have funds (USDC/USDT) in your Futures wallet.", level='warning', account_name=acc_name)
+                        self.engine.log(f"Balance for {acc_name} is 0.00. Please ensure you have funds (USDC) in your Futures wallet.", level='warning', account_name=acc_name)
                         self.engine.last_log_times[log_key] = time.time()
 
             # Positions (Weight 5) - Update every 10s unless forced

@@ -198,10 +198,13 @@ class BinanceTradingBotEngine:
                     state['quantity'] = total_qty
                     state['avg_entry_price'] = sum(o['qty']*o['price'] for o in filled_entries)/total_qty
 
-                    # Place TP - Ensure TP grid is placed now that position exists (REDUCE_ONLY won't fail)
+                    # Place TP/SL - Ensure protection is placed now that position exists (REDUCE_ONLY won't fail)
                     strategy = self.config_handler.get_strategy(symbol)
+                    direction = strategy.get('direction', 'LONG')
+                    if strategy.get('stop_loss_enabled'):
+                        self.strategy_handler.setup_sl_logic(idx, symbol, state['avg_entry_price'], state['trade_id'])
                     if strategy.get('tp_enabled', True):
-                        self.strategy_handler.setup_tp_targets_logic(idx, symbol, state['avg_entry_price'], strategy.get('tp_targets', []), total_qty, strategy.get('direction', 'LONG'), strategy.get('trailing_tp_enabled', False), state['trade_id'])
+                        self.strategy_handler.setup_tp_targets_logic(idx, symbol, state['avg_entry_price'], strategy.get('tp_targets', []), total_qty, direction, strategy.get('trailing_tp_enabled', False), state['trade_id'])
                         state['pending_tp_grid'] = False # Marked as placed
 
                 elif state.get('levels'):

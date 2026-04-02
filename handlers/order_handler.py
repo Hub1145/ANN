@@ -27,7 +27,7 @@ class OrderHandler:
                 params['quantity'] = self.format_quantity(symbol, qty)
             if client_id: params['newClientOrderId'] = client_id
 
-            self.engine.log("placing_stop_order", account_name=acc_name, is_key=True, symbol=symbol, side=side, stop_price=params['stopPrice'])
+            # Removed redundant logging of placement to prevent spam. StrategyHandler handles specific feedback.
             order = self.engine.safe_api_call(target_client.futures_create_order, **params)
             return order['orderId']
         except BinanceAPIException as e:
@@ -44,7 +44,7 @@ class OrderHandler:
             self.engine.log("stop_order_failed", level='error', account_name=acc_name, is_key=True, error=str(e))
             return None
 
-    def place_limit_order(self, idx, symbol, side, qty, price, client_id=None, reduce_only=False):
+    def place_limit_order(self, idx, symbol, side, qty, price, client_id=None, reduce_only=False, is_tp=False):
         target_client = self.engine.accounts[idx]['client'] if idx in self.engine.accounts else self.engine.bg_clients.get(idx, {}).get('client')
         if not target_client: return None
 
@@ -77,27 +77,30 @@ class OrderHandler:
                 self.engine.log("order_skipped_min_notional", level='warning', account_name=acc_name, is_key=True, symbol=symbol, notional=f"{notional:.2f}", min_notional=f"{min_notional:.2f}")
                 return None
 
-            self.engine.log("placing_limit_order", account_name=acc_name, is_key=True, symbol=symbol, side=side, qty=formatted_qty_str, price=formatted_price_str)
-
+            # Removed redundant logging of placement to prevent spam. StrategyHandler handles specific feedback.
             params = {
                 'symbol': symbol,
                 'side': side,
-                'type': Client.FUTURE_ORDER_TYPE_LIMIT,
+                'type': Client.FUTURE_ORDER_TYPE_TAKE_PROFIT_LIMIT if is_tp else Client.FUTURE_ORDER_TYPE_LIMIT,
                 'timeInForce': Client.TIME_IN_FORCE_GTC,
                 'quantity': formatted_qty_str,
                 'price': formatted_price_str,
                 'reduceOnly': 'true' if reduce_only else 'false'
             }
+            if is_tp:
+                params['stopPrice'] = formatted_price_str
             if client_id: params['newClientOrderId'] = client_id
+
+            if client_id:
+                with self.engine.data_lock:
+                    if (idx, symbol) not in self.recent_client_ids: self.recent_client_ids[(idx, symbol)] = {}
+                    self.recent_client_ids[(idx, symbol)][client_id] = time.time()
 
             order = self.engine.safe_api_call(target_client.futures_create_order, **params)
 
             if client_id:
                 wait_key = (idx, symbol, client_id)
                 if wait_key in self.engine.trailing_state: del self.engine.trailing_state[wait_key]
-                with self.engine.data_lock:
-                    if (idx, symbol) not in self.recent_client_ids: self.recent_client_ids[(idx, symbol)] = {}
-                    self.recent_client_ids[(idx, symbol)][client_id] = time.time()
 
             return order['orderId']
         except BinanceAPIException as e:
