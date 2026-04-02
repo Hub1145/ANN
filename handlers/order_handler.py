@@ -33,6 +33,10 @@ class OrderHandler:
         except BinanceAPIException as e:
             if e.code == -2022:
                 if client_id: self.engine.trailing_state[(idx, symbol, client_id)] = 'REJECTED_REDUCE_ONLY'
+                log_key = f"reduce_only_pending_{idx}_{symbol}"
+                if time.time() - self.engine.last_log_times.get(log_key, 0) > 60:
+                    self.engine.log("reduce_only_pending", level='info', account_name=acc_name, is_key=True, symbol=symbol)
+                    self.engine.last_log_times[log_key] = time.time()
             else:
                 self.engine.log("stop_order_failed", level='error', account_name=acc_name, is_key=True, error=str(e))
             return None
@@ -101,6 +105,10 @@ class OrderHandler:
                 self.engine.log("limit_order_price_error", level='warning', account_name=acc_name, is_key=True, symbol=symbol, error=e.message)
             elif e.code == -2022:
                 if client_id: self.engine.trailing_state[(idx, symbol, client_id)] = 'REJECTED_REDUCE_ONLY'
+                log_key = f"reduce_only_pending_{idx}_{symbol}"
+                if time.time() - self.engine.last_log_times.get(log_key, 0) > 60:
+                    self.engine.log("reduce_only_pending", level='info', account_name=acc_name, is_key=True, symbol=symbol)
+                    self.engine.last_log_times[log_key] = time.time()
             else:
                 self.engine.log("limit_order_failed", level='error', account_name=acc_name, is_key=True, error=str(e))
             return None

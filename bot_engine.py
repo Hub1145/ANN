@@ -237,6 +237,7 @@ class BinanceTradingBotEngine:
     def start(self):
         self.is_running = True
         self.stop_event.clear()
+        self.log("Starting Binance Bot Engine...", level='info')
         api_accounts = self.config_handler.config.get('api_accounts', [])
         for i, acc in enumerate(api_accounts):
             if acc.get('enabled', True) and acc.get('api_key'):
@@ -245,6 +246,7 @@ class BinanceTradingBotEngine:
                     self.strategy_handler.start_symbol_thread(i, symbol)
 
     def stop(self):
+        self.log("Binance Bot Engine stopped.", level='info')
         self.is_running = False
         self.accounts = {}
 

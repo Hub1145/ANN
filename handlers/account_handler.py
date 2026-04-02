@@ -37,24 +37,28 @@ class AccountHandler:
                 if idx not in self.per_asset_balances: self.per_asset_balances[idx] = {}
 
                 if idx in self.engine.accounts:
-                    # For active accounts, use futures_account() to get more reliable totalWalletBalance
+                    # For active accounts, use futures_account() and strictly use USDC
                     account_info = self.engine.safe_api_call(client.futures_account)
+                    usdc_bal = 0.0
                     for asset_data in account_info.get('assets', []):
                         a_name = asset_data['asset']
                         a_bal = float(asset_data['walletBalance'])
                         self.per_asset_balances[idx][a_name] = a_bal
-                        if a_name in stable_assets:
-                            total_wallet_balance += a_bal
+                        if a_name == 'USDC':
+                            usdc_bal = a_bal
+                    total_wallet_balance = usdc_bal
                 else:
                     # For background accounts, use futures_account_balance()
                     balances = self.engine.safe_api_call(client.futures_account_balance)
                     if balances:
+                        usdc_bal = 0.0
                         for b in balances:
                             a_name = b.get('asset')
                             a_bal = float(b.get('balance') or 0)
                             self.per_asset_balances[idx][a_name] = a_bal
-                            if a_name in stable_assets:
-                                total_wallet_balance += a_bal
+                            if a_name == 'USDC':
+                                usdc_bal = a_bal
+                        total_wallet_balance = usdc_bal
 
                 with self.engine.data_lock:
                     self.account_balances[idx] = total_wallet_balance

@@ -984,12 +984,18 @@ function setupSocketListeners() {
 
     socket.on('console_log', (data) => {
         const out = document.getElementById('consoleOutput');
+        if (!out) return;
+
         const div = document.createElement('div');
         div.className = `small mb-1 console-entry ${data.level === 'error' ? 'text-danger' : 'text-success'}`;
-        // data.rendered is pre-rendered on backend but if we changed language
-        // we might get the whole history or just updates.
         div.innerText = `[${data.timestamp}] ${data.rendered || data.message}`;
         out.appendChild(div);
+
+        // Limit number of entries to prevent UI lag
+        while (out.children.length > 200) {
+            out.removeChild(out.firstChild);
+        }
+
         out.scrollTop = out.scrollHeight;
     });
 
