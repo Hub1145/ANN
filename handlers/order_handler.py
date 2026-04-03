@@ -44,7 +44,7 @@ class OrderHandler:
             self.engine.log("stop_order_failed", level='error', account_name=acc_name, is_key=True, error=str(e))
             return None
 
-    def place_limit_order(self, idx, symbol, side, qty, price, client_id=None, reduce_only=False, is_tp=False):
+    def place_limit_order(self, idx, symbol, side, qty, price, client_id=None, reduce_only=False):
         target_client = self.engine.accounts[idx]['client'] if idx in self.engine.accounts else self.engine.bg_clients.get(idx, {}).get('client')
         if not target_client: return None
 

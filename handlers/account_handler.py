@@ -184,12 +184,26 @@ class AccountHandler:
                         else:
                             pending_tracked_qty += float(t.get('quantity') or 0)
 
+                        trade_levels = []
+                        for lid, lvl in t.get('levels', {}).items():
+                            trade_levels.append({
+                                'level': lid,
+                                'price': lvl.get('price'),
+                                'qty': lvl.get('qty'),
+                                'filled': lvl.get('filled'),
+                                'order_id': lvl.get('tp_order_id'),
+                                'is_market': lvl.get('is_market'),
+                                'is_trailing': lvl.get('trailing_eligible')
+                            })
+
                         p_copy['trades'].append({
                             'trade_id': t.get('trade_id'),
                             'entry_price': t.get('avg_entry_price', 0),
                             'amount': t_qty if is_filled else float(t.get('quantity') or 0),
                             'filled': is_filled,
-                            'pnl': trade_pnl
+                            'pnl': trade_pnl,
+                            'levels': trade_levels,
+                            'sl_order_id': t.get('sl_order_id')
                         })
 
                     total_qty_pa = abs(float(p_copy.get('amount') or 0))
