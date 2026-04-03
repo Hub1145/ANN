@@ -105,7 +105,7 @@ class StrategyHandler:
 
         self.engine.log("placing_market_initial", account_name=self.engine.accounts[idx]['info'].get('name'), is_key=True, direction=direction)
         order = self.engine.safe_api_call(client.futures_create_order,
-            symbol=symbol, side=side, type='MARKET', quantity=self.engine.order_handler.format_quantity(symbol, qty))
+            symbol=symbol, side=side, type=Client.FUTURE_ORDER_TYPE_MARKET, quantity=self.engine.order_handler.format_quantity(symbol, qty))
 
         with self.engine.data_lock:
             if (idx, symbol) not in self.engine.grid_state: self.engine.grid_state[(idx, symbol)] = []

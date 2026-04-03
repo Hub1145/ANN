@@ -351,7 +351,7 @@ class BinanceTradingBotEngine:
                         p = float(strategy.get('sl_order_price', 0)) or self.market_handler.get_price(symbol)
                         self.order_handler.place_limit_order(idx, symbol, side, qty_to_close, p, reduce_only=True)
                     else:
-                        self.safe_api_call(target_client.futures_create_order, symbol=symbol, side=side, type='MARKET', quantity=self.order_handler.format_quantity(symbol, qty_to_close))
+                        self.safe_api_call(target_client.futures_create_order, symbol=symbol, side=side, type=Client.FUTURE_ORDER_TYPE_MARKET, quantity=self.order_handler.format_quantity(symbol, qty_to_close))
 
                 with self.data_lock:
                     self.grid_state[(idx, symbol)] = [t for t in self.grid_state.get((idx, symbol), []) if t.get('trade_id') != trade_id]
@@ -362,7 +362,7 @@ class BinanceTradingBotEngine:
                     if p.get('symbol') == symbol:
                         amt = float(p.get('positionAmt', 0))
                         if amt != 0:
-                            self.safe_api_call(target_client.futures_create_order, symbol=symbol, side='SELL' if amt > 0 else 'BUY', type='MARKET', quantity=self.order_handler.format_quantity(symbol, abs(amt)))
+                            self.safe_api_call(target_client.futures_create_order, symbol=symbol, side='SELL' if amt > 0 else 'BUY', type=Client.FUTURE_ORDER_TYPE_MARKET, quantity=self.order_handler.format_quantity(symbol, abs(amt)))
                 with self.data_lock:
                     if (idx, symbol) in self.grid_state: del self.grid_state[(idx, symbol)]
             self.account_handler.emit_account_update()

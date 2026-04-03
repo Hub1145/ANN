@@ -81,7 +81,7 @@ class OrderHandler:
             params = {
                 'symbol': symbol,
                 'side': side,
-                'type': Client.FUTURE_ORDER_TYPE_TAKE_PROFIT_LIMIT if is_tp else Client.FUTURE_ORDER_TYPE_LIMIT,
+                'type': Client.FUTURE_ORDER_TYPE_TAKE_PROFIT if is_tp else Client.FUTURE_ORDER_TYPE_LIMIT,
                 'timeInForce': Client.TIME_IN_FORCE_GTC,
                 'quantity': formatted_qty_str,
                 'price': formatted_price_str,
