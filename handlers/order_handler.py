@@ -81,14 +81,12 @@ class OrderHandler:
             params = {
                 'symbol': symbol,
                 'side': side,
-                'type': Client.FUTURE_ORDER_TYPE_TAKE_PROFIT if is_tp else Client.FUTURE_ORDER_TYPE_LIMIT,
+                'type': Client.FUTURE_ORDER_TYPE_LIMIT,
                 'timeInForce': Client.TIME_IN_FORCE_GTC,
                 'quantity': formatted_qty_str,
                 'price': formatted_price_str,
                 'reduceOnly': 'true' if reduce_only else 'false'
             }
-            if is_tp:
-                params['stopPrice'] = formatted_price_str
             if client_id: params['newClientOrderId'] = client_id
 
             if client_id:
@@ -112,6 +110,12 @@ class OrderHandler:
                 if time.time() - self.engine.last_log_times.get(log_key, 0) > 60:
                     self.engine.log("reduce_only_pending", level='info', account_name=acc_name, is_key=True, symbol=symbol)
                     self.engine.last_log_times[log_key] = time.time()
+            elif e.code == -4120:
+                # Silently catch Algo Order API requirement; we prefer regular LIMIT for standard TP
+                pass
+            elif e.code == -1007:
+                # Backend timeout - usually retryable but we log it as info to avoid level='error' panic
+                self.engine.log("limit_order_timeout", level='info', account_name=acc_name, is_key=True)
             else:
                 self.engine.log("limit_order_failed", level='error', account_name=acc_name, is_key=True, error=str(e))
             return None

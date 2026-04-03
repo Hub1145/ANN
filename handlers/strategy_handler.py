@@ -147,9 +147,8 @@ class StrategyHandler:
 
                 # Immediate SL placement (STOP_MARKET with closePosition=True works even without position)
                 self.setup_sl_logic(idx, symbol, price, trade_id, override_strategy=strategy)
-                # Immediate TP placement (will likely fail with 2022 but we fulfill "place with entry")
-                if strategy.get('tp_enabled', True):
-                    self.setup_tp_targets_logic(idx, symbol, price, strategy.get('tp_targets', []), qty, direction_override=direction, trailing_tp_enabled=strategy.get('trailing_tp_enabled', False), trade_id=trade_id, override_strategy=strategy)
+                # Immediate TP placement is skipped for LIMIT entry to avoid ReduceOnly (Error -2022)
+                # and Endpoint (Error -4120) issues. TP will be placed by the worker loop once entry fills.
 
     def trailing_tp_logic(self, idx, symbol):
         strategy = self.engine.config_handler.get_strategy(symbol)
@@ -413,6 +412,9 @@ class StrategyHandler:
                 else:
                     order_id = self.engine.order_handler.place_limit_order(idx, symbol, o['side'], o['qty'], o['price'], client_id=client_id, reduce_only=True, is_tp=True)
                     if order_id: newly_placed_count += 1
+                    else:
+                        # If an order failed (likely ReduceOnly or other issue), break to prevent mass spam
+                        break
 
                 if order_id:
                     with self.engine.data_lock:
