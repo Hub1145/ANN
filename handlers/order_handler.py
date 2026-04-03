@@ -27,14 +27,13 @@ class OrderHandler:
                 params['quantity'] = self.format_quantity(symbol, qty)
             if client_id: params['newClientOrderId'] = client_id
 
-            # Removed redundant logging of placement to prevent spam. StrategyHandler handles specific feedback.
             order = self.engine.safe_api_call(target_client.futures_create_order, **params)
             return order['orderId']
         except BinanceAPIException as e:
             if e.code == -2022:
                 if client_id: self.engine.trailing_state[(idx, symbol, client_id)] = 'REJECTED_REDUCE_ONLY'
                 log_key = f"reduce_only_pending_{idx}_{symbol}"
-                if time.time() - self.engine.last_log_times.get(log_key, 0) > 60:
+                if time.time() - self.engine.last_log_times.get(log_key, 0) > 300:
                     self.engine.log("reduce_only_pending", level='info', account_name=acc_name, is_key=True, symbol=symbol)
                     self.engine.last_log_times[log_key] = time.time()
             else:
@@ -65,9 +64,7 @@ class OrderHandler:
             f_qty = float(formatted_qty_str)
             f_price = float(formatted_price_str)
 
-            if f_qty <= 0:
-                self.engine.log(f"Limit order skipped for {symbol}: Calculated quantity {qty} <= 0.", level='warning', account_name=acc_name)
-                return None
+            if f_qty <= 0: return None
 
             notional = f_qty * f_price
             ex_info = self.engine.market_handler.exchange_info.get(symbol, {})
@@ -77,7 +74,6 @@ class OrderHandler:
                 self.engine.log("order_skipped_min_notional", level='warning', account_name=acc_name, is_key=True, symbol=symbol, notional=f"{notional:.2f}", min_notional=f"{min_notional:.2f}")
                 return None
 
-            # Removed redundant logging of placement to prevent spam. StrategyHandler handles specific feedback.
             params = {
                 'symbol': symbol,
                 'side': side,
@@ -107,14 +103,10 @@ class OrderHandler:
             elif e.code == -2022:
                 if client_id: self.engine.trailing_state[(idx, symbol, client_id)] = 'REJECTED_REDUCE_ONLY'
                 log_key = f"reduce_only_pending_{idx}_{symbol}"
-                if time.time() - self.engine.last_log_times.get(log_key, 0) > 60:
+                if time.time() - self.engine.last_log_times.get(log_key, 0) > 300:
                     self.engine.log("reduce_only_pending", level='info', account_name=acc_name, is_key=True, symbol=symbol)
                     self.engine.last_log_times[log_key] = time.time()
-            elif e.code == -4120:
-                # Silently catch Algo Order API requirement; we prefer regular LIMIT for standard TP
-                pass
             elif e.code == -1007:
-                # Backend timeout - usually retryable but we log it as info to avoid level='error' panic
                 self.engine.log("limit_order_timeout", level='info', account_name=acc_name, is_key=True)
             else:
                 self.engine.log("limit_order_failed", level='error', account_name=acc_name, is_key=True, error=str(e))
@@ -125,9 +117,7 @@ class OrderHandler:
 
     def format_quantity(self, symbol, quantity):
         ex_info = self.engine.market_handler.exchange_info.get(symbol)
-        if not ex_info:
-            return f"{quantity:.8f}".rstrip('0').rstrip('.')
-
+        if not ex_info: return f"{quantity:.8f}".rstrip('0').rstrip('.')
         step_size = str(ex_info['step_size'])
         step_d = Decimal(step_size).normalize()
         qty_d = Decimal(str(quantity))
@@ -137,9 +127,7 @@ class OrderHandler:
 
     def format_price(self, symbol, price):
         ex_info = self.engine.market_handler.exchange_info.get(symbol)
-        if not ex_info:
-            return f"{price:.8f}".rstrip('0').rstrip('.')
-
+        if not ex_info: return f"{price:.8f}".rstrip('0').rstrip('.')
         tick_size = str(ex_info['tick_size'])
         tick_d = Decimal(tick_size).normalize()
         price_d = Decimal(str(price))

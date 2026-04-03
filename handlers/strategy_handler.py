@@ -209,13 +209,13 @@ class StrategyHandler:
                 recent_tp_setup = time.time() - t.get('last_tp_setup_attempt', 0) < 10
 
                 # Check if TP levels are initialized or any order is missing
-                # Crucial fix: if levels is empty but tp is enabled, we MUST initialize.
                 is_tp_enabled = strategy.get('tp_enabled', True)
                 levels_missing = (not t.get('levels')) and is_tp_enabled
+
+                # We check if orders exist. Since we use reduce_only=False, placement should be successful immediately.
                 any_tp_missing = levels_missing or any(not lvl.get('tp_order_id') and not lvl.get('filled') and not lvl.get('is_market') for lid, lvl in t.get('levels', {}).items())
 
                 if any_tp_missing and not recent_tp_setup:
-                    # Attempt placement. For LIMIT entries, it might get ReduceOnly rejected until fill, which is fine.
                     t['last_tp_setup_attempt'] = time.time()
                     self.setup_tp_targets_logic(idx, symbol, t['avg_entry_price'], strategy.get('tp_targets', []), t['quantity'], direction_override=direction, trailing_tp_enabled=strategy.get('trailing_tp_enabled', False), trade_id=t['trade_id'], override_strategy=strategy, force_reset=levels_missing)
 
@@ -257,18 +257,17 @@ class StrategyHandler:
                 t['sl_order_id'] = order_id
 
     def stop_loss_logic(self, idx, symbol):
-        # Stop loss is now handled by Binance STOP_MARKET orders placed in setup_sl_logic
-        # We only need to ensure they stay placed
+        # Stop loss is handled by Binance STOP_MARKET orders.
         strategy = self.engine.config_handler.get_strategy(symbol)
         if not strategy.get('stop_loss_enabled'): return
 
         with self.engine.data_lock:
             for t in self.engine.grid_state.get((idx, symbol), []):
-                # Throttle SL setup check
+                # We skip re-placing if an order ID exists or we're waiting for entry to fill
+                # (though STOP_MARKET works without position, we throttle retries)
                 recent_sl_setup = time.time() - t.get('last_sl_setup_attempt', 0) < 10
 
                 if not t.get('sl_order_id') and not recent_sl_setup:
-                    # SL is attempted immediately upon entry order creation, but we retry here.
                     t['last_sl_setup_attempt'] = time.time()
                     self.setup_sl_logic(idx, symbol, t['avg_entry_price'], t['trade_id'], override_strategy=strategy)
 
@@ -414,7 +413,9 @@ class StrategyHandler:
                     # Keep track of the order ID if it was recently placed but not in open_orders yet
                     continue
                 else:
-                    order_id = self.engine.order_handler.place_limit_order(idx, symbol, o['side'], o['qty'], o['price'], client_id=client_id, reduce_only=True)
+                    # To place with entry "like a grid", we MUST use reduce_only=False if the position isn't open yet.
+                    # Standard LIMIT orders are used for maximum compatibility.
+                    order_id = self.engine.order_handler.place_limit_order(idx, symbol, o['side'], o['qty'], o['price'], client_id=client_id, reduce_only=False)
                     if order_id:
                         newly_placed_count += 1
 
