@@ -223,7 +223,7 @@ class AccountHandler:
                         strategy = self.engine.config_handler.get_strategy(symbol)
                         direction = strategy.get('direction', 'LONG')
                         multiplier = 1 if direction == 'LONG' else -1
-                        ext_pnl = (current_price - ext_avg) * diff_qty * multiplier
+                        ext_pnl = (current_price - ext_avg) * unaccounted_qty * multiplier
 
                         p_copy['trades'].append({
                             'trade_id': 'External',

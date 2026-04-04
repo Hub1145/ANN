@@ -180,16 +180,21 @@ class BinanceTradingBotEngine:
         if order_data.get('X') != 'FILLED': return
         symbol, order_id = order_data.get('s'), order_data.get('i')
         avg_price, filled_qty = float(order_data.get('ap', 0)), float(order_data.get('z', 0))
+        s_order_id = str(order_id)
 
         with self.data_lock:
-            trades = self.grid_state.get((idx, symbol), [])
+            trades = self.grid_state.get((int(idx), symbol), [])
             state = None
             for t in trades:
-                if order_id in t.get('initial_orders', {}) or order_id == t.get('initial_order_id'): state = t; break
-                if t.get('levels') and any(l.get('tp_order_id') == order_id for l in t['levels'].values()): state = t; break
+                if any(str(oid) == s_order_id for oid in t.get('initial_orders', {})) or str(t.get('initial_order_id')) == s_order_id:
+                    state = t
+                    break
+                if t.get('levels') and any(str(l.get('tp_order_id')) == s_order_id for l in t['levels'].values()):
+                    state = t
+                    break
 
             if state:
-                if order_id in state.get('initial_orders', {}) or order_id == state.get('initial_order_id'):
+                if any(str(oid) == s_order_id for oid in t.get('initial_orders', {})) or str(state.get('initial_order_id')) == s_order_id:
                     state['initial_filled'] = True
                     if 'initial_orders' not in state: state['initial_orders'] = {}
                     state['initial_orders'][order_id] = {'qty': filled_qty, 'price': avg_price, 'filled': True}
@@ -198,14 +203,14 @@ class BinanceTradingBotEngine:
                     state['quantity'] = total_qty
                     state['avg_entry_price'] = sum(o['qty']*o['price'] for o in filled_entries)/total_qty
 
-                    # Place TP - Ensure TP grid is placed now that position exists (REDUCE_ONLY won't fail)
-                    strategy = self.config_handler.get_strategy(symbol)
-                    # Use stored direction from trade state if available, else global
+                    # Use saved strategy if available (crucial for 'Add Trade' overrides)
+                    strategy = state.get('strategy') or self.config_handler.get_strategy(symbol)
                     direction = state.get('direction', strategy.get('direction', 'LONG'))
 
                     if strategy.get('tp_enabled', True):
-                        self.strategy_handler.setup_tp_targets_logic(idx, symbol, state['avg_entry_price'], strategy.get('tp_targets', []), total_qty, direction_override=direction, trailing_tp_enabled=strategy.get('trailing_tp_enabled', False), trade_id=state['trade_id'])
-                        state['pending_tp_grid'] = False # Marked as placed
+                        self.log(f"Entry filled for {symbol} ({state['trade_id']}). Placing TP grid.", level='info', account_name=self.accounts.get(int(idx), {}).get('info', {}).get('name'))
+                        self.strategy_handler.setup_tp_targets_logic(int(idx), symbol, state['avg_entry_price'], strategy.get('tp_targets', []), total_qty, direction_override=direction, trailing_tp_enabled=strategy.get('trailing_tp_enabled', False), trade_id=state['trade_id'], override_strategy=strategy)
+                        state['pending_tp_grid'] = False
 
                 elif state.get('levels'):
                     for lvl in state['levels'].values():
@@ -369,7 +374,9 @@ class BinanceTradingBotEngine:
         except: pass
 
     def start_add_trade(self, account_idx, symbol, settings=None):
-        self.strategy_handler.check_and_place_initial_entry(account_idx, symbol, trade_id=f"man-{int(time.time())}", override_strategy=settings)
+        trade_id = f"trd-{int(time.time())}"
+        self.log(f"Initiating 'Add Trade' for {symbol} as {trade_id}", level='info', account_name=self.accounts.get(account_idx, {}).get('info', {}).get('name'))
+        self.strategy_handler.check_and_place_initial_entry(account_idx, symbol, trade_id=trade_id, override_strategy=settings)
 
     def refresh_data(self):
         for i in range(len(self.config_handler.config.get('api_accounts', []))):

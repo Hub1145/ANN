@@ -59,6 +59,8 @@ class StrategyHandler:
         use_existing = strategy.get('use_existing', False) or strategy.get('use_existing_assets', False)
 
         with self.engine.data_lock:
+            if (idx, symbol) not in self.engine.grid_state: self.engine.grid_state[(idx, symbol)] = []
+
             pos_dict = self.engine.account_handler.open_positions.get(idx, {})
             p_info = pos_dict.get(symbol)
             has_pos = p_info is not None
@@ -78,7 +80,8 @@ class StrategyHandler:
                     direction = strategy.get('direction', 'LONG')
                     self.engine.grid_state[(idx, symbol)].append({
                         'trade_id': trade_id, 'initial_filled': True, 'initial_order_id': 'existing',
-                        'quantity': actual_qty, 'avg_entry_price': actual_price, 'direction': direction, 'levels': {}
+                        'quantity': actual_qty, 'avg_entry_price': actual_price, 'direction': direction,
+                        'strategy': strategy, 'levels': {}
                     })
 
                     # Immediate TP/SL
@@ -116,7 +119,8 @@ class StrategyHandler:
             self.engine.grid_state[(idx, symbol)].append({
                 'trade_id': trade_id, 'initial_filled': True, 'initial_order_id': oid,
                 'initial_orders': {oid: {'qty': actual_qty, 'price': actual_price, 'filled': True}},
-                'quantity': actual_qty, 'avg_entry_price': actual_price, 'direction': direction, 'levels': {}
+                'quantity': actual_qty, 'avg_entry_price': actual_price, 'direction': direction,
+                'strategy': strategy, 'levels': {}
             })
 
             # Immediate TP/SL
@@ -141,7 +145,8 @@ class StrategyHandler:
                 # Register the trade in grid_state
                 self.engine.grid_state[(idx, symbol)].append({
                     'trade_id': trade_id, 'initial_filled': False, 'initial_order_id': order_id,
-                    'quantity': qty, 'avg_entry_price': price, 'direction': direction, 'levels': {},
+                    'quantity': qty, 'avg_entry_price': price, 'direction': direction,
+                    'strategy': strategy, 'levels': {},
                     'pending_tp_grid': strategy.get('tp_enabled', True)
                 })
 
