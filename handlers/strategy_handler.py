@@ -147,10 +147,9 @@ class StrategyHandler:
 
                 # Immediate SL placement (STOP_MARKET with closePosition=True works even without position)
                 self.setup_sl_logic(idx, symbol, price, trade_id, override_strategy=strategy)
-                # Immediate TP placement attempt (fulfills "place with entry").
-                # ReduceOnly rejection (-2022) is handled by OrderHandler and retried in worker.
-                if strategy.get('tp_enabled', True):
-                    self.setup_tp_targets_logic(idx, symbol, price, strategy.get('tp_targets', []), qty, direction_override=direction, trailing_tp_enabled=strategy.get('trailing_tp_enabled', False), trade_id=trade_id, override_strategy=strategy, force_reset=True)
+
+                # Take Profit placement is now deferred until the entry order fills.
+                # This ensures we can use reduce_only=True safely.
 
     def trailing_tp_logic(self, idx, symbol):
         strategy = self.engine.config_handler.get_strategy(symbol)
@@ -212,10 +211,10 @@ class StrategyHandler:
                 is_tp_enabled = strategy.get('tp_enabled', True)
                 levels_missing = (not t.get('levels')) and is_tp_enabled
 
-                # We check if orders exist. Since we use reduce_only=False, placement should be successful immediately.
                 any_tp_missing = levels_missing or any(not lvl.get('tp_order_id') and not lvl.get('filled') and not lvl.get('is_market') for lid, lvl in t.get('levels', {}).items())
 
-                if any_tp_missing and not recent_tp_setup:
+                # We only place TP if the initial entry is filled (to ensure position exists for reduceOnly)
+                if any_tp_missing and not recent_tp_setup and (t.get('initial_filled') or t.get('initial_order_id') == 'existing'):
                     t['last_tp_setup_attempt'] = time.time()
                     self.setup_tp_targets_logic(idx, symbol, t['avg_entry_price'], strategy.get('tp_targets', []), t['quantity'], direction_override=direction, trailing_tp_enabled=strategy.get('trailing_tp_enabled', False), trade_id=t['trade_id'], override_strategy=strategy, force_reset=levels_missing)
 
@@ -413,9 +412,8 @@ class StrategyHandler:
                     # Keep track of the order ID if it was recently placed but not in open_orders yet
                     continue
                 else:
-                    # To place with entry "like a grid", we MUST use reduce_only=False if the position isn't open yet.
-                    # Standard LIMIT orders are used for maximum compatibility.
-                    order_id = self.engine.order_handler.place_limit_order(idx, symbol, o['side'], o['qty'], o['price'], client_id=client_id, reduce_only=False)
+                    # Switched back to reduce_only=True since we now wait for the entry fill.
+                    order_id = self.engine.order_handler.place_limit_order(idx, symbol, o['side'], o['qty'], o['price'], client_id=client_id, reduce_only=True)
                     if order_id:
                         newly_placed_count += 1
 
