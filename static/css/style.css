@@ -20,6 +20,7 @@ body {
     margin: 0;
     font-size: 0.85rem;
     overflow-x: hidden;
+    scrollbar-gutter: stable;
 }
 
 .hero-section {

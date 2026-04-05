@@ -96,21 +96,35 @@ def handle_connect():
 @socketio.on('start_bot')
 def handle_start_bot():
     global bot_engine
-    if not bot_engine:
-        bot_engine = BinanceTradingBotEngine(config_file, emit_to_client, server_ip=server_ip)
+    try:
+        if not bot_engine:
+            bot_engine = BinanceTradingBotEngine(config_file, emit_to_client, server_ip=server_ip)
 
-    if not bot_engine.is_running:
-        bot_engine.start()
-        emit('bot_status', {'running': True}, broadcast=True)
-        emit('success', {'message': 'Bot started successfully'})
+        if not bot_engine.is_running:
+            bot_engine.start()
+            emit('bot_status', {'running': True}, broadcast=True)
+            emit('success', {'message': 'Bot started successfully'})
+        else:
+            emit('bot_status', {'running': True})
+    except Exception as e:
+        logging.error(f"Error starting bot: {e}")
+        emit('bot_status', {'running': False})
+        emit('error', {'message': str(e)})
 
 @socketio.on('stop_bot')
 def handle_stop_bot():
     global bot_engine
-    if bot_engine and bot_engine.is_running:
-        bot_engine.stop()
-        emit('bot_status', {'running': False}, broadcast=True)
-        emit('success', {'message': 'Bot stopped successfully'})
+    try:
+        if bot_engine and bot_engine.is_running:
+            bot_engine.stop()
+            emit('bot_status', {'running': False}, broadcast=True)
+            emit('success', {'message': 'Bot stopped successfully'})
+        else:
+            emit('bot_status', {'running': False})
+    except Exception as e:
+        logging.error(f"Error stopping bot: {e}")
+        emit('bot_status', {'running': bot_engine.is_running if bot_engine else False})
+        emit('error', {'message': str(e)})
 
 @socketio.on('clear_console')
 def handle_clear_console():
