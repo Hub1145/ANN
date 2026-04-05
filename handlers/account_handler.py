@@ -132,6 +132,7 @@ class AccountHandler:
             self.account_errors[idx] = str(e)
 
     def emit_account_update(self):
+        if not hasattr(self.engine, 'data_lock'): return # Engine not fully initialized
         with self.engine.data_lock:
             total_balance = sum(list(self.account_balances.values()))
             total_pnl = 0.0

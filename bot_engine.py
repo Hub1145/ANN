@@ -160,7 +160,7 @@ class BinanceTradingBotEngine:
     def _handle_user_data(self, idx, msg):
         event_type = msg.get('e')
         if event_type == 'ORDER_TRADE_UPDATE':
-            self._process_filled_order(idx, msg.get('o', {}))
+            self._on_order_update(idx, msg.get('o', {}))
         elif event_type == 'ACCOUNT_UPDATE':
             update_data = msg.get('a', {})
             with self.data_lock:
@@ -176,25 +176,61 @@ class BinanceTradingBotEngine:
                         self.account_handler.open_positions[idx][symbol] = {'symbol': symbol, 'amount': p.get('pa'), 'entryPrice': p.get('ep'), 'unrealizedProfit': p.get('up'), 'leverage': p.get('l', '20')}
             self.account_handler.emit_account_update()
 
-    def _process_filled_order(self, idx, order_data):
-        if order_data.get('X') != 'FILLED': return
+    def _on_order_update(self, idx, order_data):
         symbol, order_id = order_data.get('s'), order_data.get('i')
-        avg_price, filled_qty = float(order_data.get('ap', 0)), float(order_data.get('z', 0))
+        status = order_data.get('X')
         s_order_id = str(order_id)
+        idx = int(idx)
+
+        acc = self.accounts.get(idx) or self.bg_clients.get(idx)
+        acc_name = acc.get('info', {}).get('name') if acc else f"Account {idx+1}"
+
+        # 1. Real-time Open Orders Tracking
+        with self.data_lock:
+            if idx not in self.account_handler.open_orders:
+                self.account_handler.open_orders[idx] = []
+
+            orders = self.account_handler.open_orders[idx]
+            # Update cache based on status
+            if status in ['NEW', 'PARTIALLY_FILLED']:
+                # Upsert
+                found = False
+                for o in orders:
+                    if str(o.get('orderId')) == s_order_id:
+                        o.update({
+                            'status': status, 'origQty': order_data.get('q'),
+                            'price': order_data.get('p') or order_data.get('sp') or '0',
+                            'side': order_data.get('S'),
+                            'type': order_data.get('o'), 'symbol': symbol
+                        }); found = True; break
+                if not found:
+                    orders.append({
+                        'orderId': order_id, 'symbol': symbol, 'side': order_data.get('S'),
+                        'type': order_data.get('o'), 'origQty': order_data.get('q'),
+                        'price': order_data.get('p') or order_data.get('sp') or '0',
+                        'status': status
+                    })
+            else:
+                # Removed (FILLED, CANCELED, EXPIRED, etc)
+                self.account_handler.open_orders[idx] = [o for o in orders if str(o.get('orderId')) != s_order_id]
+
+        self.account_handler.emit_account_update()
+
+        # 2. Trade Execution Logic
+        if status != 'FILLED': return
+        avg_price, filled_qty = float(order_data.get('ap', 0)), float(order_data.get('z', 0))
 
         with self.data_lock:
-            trades = self.grid_state.get((int(idx), symbol), [])
+            trades = self.grid_state.get((idx, symbol), [])
             state = None
             for t in trades:
                 if any(str(oid) == s_order_id for oid in t.get('initial_orders', {})) or str(t.get('initial_order_id')) == s_order_id:
-                    state = t
-                    break
+                    state = t; break
                 if t.get('levels') and any(str(l.get('tp_order_id')) == s_order_id for l in t['levels'].values()):
-                    state = t
-                    break
+                    state = t; break
 
             if state:
-                if any(str(oid) == s_order_id for oid in t.get('initial_orders', {})) or str(state.get('initial_order_id')) == s_order_id:
+                if any(str(oid) == s_order_id for oid in state.get('initial_orders', {})) or str(state.get('initial_order_id')) == s_order_id:
                     state['initial_filled'] = True
                     if 'initial_orders' not in state: state['initial_orders'] = {}
                     state['initial_orders'][order_id] = {'qty': filled_qty, 'price': avg_price, 'filled': True}
@@ -203,20 +239,18 @@ class BinanceTradingBotEngine:
                     state['quantity'] = total_qty
                     state['avg_entry_price'] = sum(o['qty']*o['price'] for o in filled_entries)/total_qty
 
-                    # Use saved strategy if available (crucial for 'Add Trade' overrides)
                     strategy = state.get('strategy') or self.config_handler.get_strategy(symbol)
                     direction = state.get('direction', strategy.get('direction', 'LONG'))
 
                     if strategy.get('tp_enabled', True):
-                        self.log(f"Entry filled for {symbol} ({state['trade_id']}). Placing TP grid.", level='info', account_name=self.accounts.get(int(idx), {}).get('info', {}).get('name'))
-                        self.strategy_handler.setup_tp_targets_logic(int(idx), symbol, state['avg_entry_price'], strategy.get('tp_targets', []), total_qty, direction_override=direction, trailing_tp_enabled=strategy.get('trailing_tp_enabled', False), trade_id=state['trade_id'], override_strategy=strategy)
+                        self.log(f"Entry filled for {symbol} ({state['trade_id']}). Placing TP grid.", level='info', account_name=acc_name)
+                        self.strategy_handler.setup_tp_targets_logic(idx, symbol, state['avg_entry_price'], strategy.get('tp_targets', []), total_qty, direction_override=direction, trailing_tp_enabled=strategy.get('trailing_tp_enabled', False), trade_id=state['trade_id'], override_strategy=strategy)
                         state['pending_tp_grid'] = False
 
                 elif state.get('levels'):
                     for lvl in state['levels'].values():
-                        if lvl.get('tp_order_id') == order_id:
+                        if str(lvl.get('tp_order_id')) == s_order_id:
                             lvl['filled'] = True
-                            # Handle reentry...
 
     def _global_background_worker(self):
         while not self.stop_event.is_set():
@@ -239,7 +273,7 @@ class BinanceTradingBotEngine:
                     self.account_handler.update_account_metrics(idx)
 
                 self.emit('price_update', self.market_handler.get_all_prices())
-                time.sleep(10)
+                time.sleep(5) # Reduced from 10s to 5s for better responsiveness
             except: time.sleep(10)
 
     def start(self):
@@ -275,7 +309,9 @@ class BinanceTradingBotEngine:
 
     def setup_strategy_for_account(self, idx, symbol):
         strategy = self.config_handler.get_strategy(symbol)
-        client = self.accounts[idx]['client']
+        acc = self.accounts.get(int(idx))
+        if not acc: return
+        client = acc['client']
         try:
             self.safe_api_call(client.futures_change_margin_type, symbol=symbol, marginType=strategy.get('margin_type', 'CROSSED'))
             self.safe_api_call(client.futures_change_leverage, symbol=symbol, leverage=int(strategy.get('leverage', 20)))
@@ -346,7 +382,11 @@ class BinanceTradingBotEngine:
                     qty_to_close = self.get_trade_quantity(trade)
 
                 for oid in orders_to_cancel:
-                    try: self.safe_api_call(target_client.futures_cancel_order, symbol=symbol, orderId=oid)
+                    try:
+                        self.safe_api_call(target_client.futures_cancel_order, symbol=symbol, orderId=oid)
+                        # Optimistically remove from cache
+                        with self.data_lock:
+                            self.account_handler.open_orders[idx] = [o for o in self.account_handler.open_orders.get(idx, []) if str(o.get('orderId')) != str(oid)]
                     except: pass
 
                 if qty_to_close > 0:
@@ -389,7 +429,10 @@ class BinanceTradingBotEngine:
         if not target_client: return False
         try:
             self.safe_api_call(target_client.futures_cancel_order, symbol=symbol, orderId=order_id)
-            self.account_handler.update_account_metrics(idx, force=True)
+            # Optimistically remove from cache
+            with self.data_lock:
+                self.account_handler.open_orders[idx] = [o for o in self.account_handler.open_orders.get(idx, []) if str(o.get('orderId')) != str(order_id)]
+            self.account_handler.emit_account_update()
             return True
         except: return False
 

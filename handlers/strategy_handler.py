@@ -11,17 +11,20 @@ class StrategyHandler:
         self.tp_setup_locks = {} # (account_index, symbol, trade_id) -> Lock
 
     def start_symbol_thread(self, idx, symbol):
-        key = (idx, symbol)
+        key = (int(idx), symbol)
         with self.engine.data_lock:
             if key in self.symbol_threads and not self.symbol_threads[key].is_alive():
                 del self.symbol_threads[key]
             if key not in self.symbol_threads:
-                t = threading.Thread(target=self._symbol_logic_worker, args=(idx, symbol), daemon=True)
+                t = threading.Thread(target=self._symbol_logic_worker, args=(int(idx), symbol), daemon=True)
                 self.symbol_threads[key] = t
                 t.start()
-                self.engine.log("started_thread", account_name=self.engine.accounts[idx]['info'].get('name'), is_key=True, symbol=symbol)
+                acc = self.engine.accounts.get(int(idx))
+                acc_name = acc.get('info', {}).get('name') if acc else f"Account {int(idx)+1}"
+                self.engine.log("started_thread", account_name=acc_name, is_key=True, symbol=symbol)
 
     def _symbol_logic_worker(self, idx, symbol):
+        idx = int(idx)
         try:
             if idx not in self.engine.accounts: return
             current_client = self.engine.accounts[idx].get('client')
@@ -52,6 +55,7 @@ class StrategyHandler:
                     del self.symbol_threads[key]
 
     def check_and_place_initial_entry(self, idx, symbol, trade_id='manual', override_strategy=None):
+        idx = int(idx)
         strategy = override_strategy or self.engine.config_handler.get_strategy(symbol)
         price = self.engine.market_handler.get_price(symbol)
         if price <= 0: return
@@ -97,6 +101,7 @@ class StrategyHandler:
                 self._execute_limit_entry(idx, symbol, limit_p, trade_id, override_strategy=strategy)
 
     def _execute_market_entry(self, idx, symbol, trade_id, override_strategy=None):
+        idx = int(idx)
         strategy = override_strategy or self.engine.config_handler.get_strategy(symbol)
         price = self.engine.market_handler.get_price(symbol)
         if price <= 0: return
@@ -129,6 +134,7 @@ class StrategyHandler:
                 self.setup_tp_targets_logic(idx, symbol, actual_price, strategy.get('tp_targets', []), actual_qty, direction_override=direction, trailing_tp_enabled=strategy.get('trailing_tp_enabled', False), trade_id=trade_id, override_strategy=strategy, force_reset=True)
 
     def _execute_limit_entry(self, idx, symbol, price, trade_id, override_strategy=None):
+        idx = int(idx)
         strategy = override_strategy or self.engine.config_handler.get_strategy(symbol)
         # Use entry_price from strategy if available
         price = float(strategy.get('entry_price', price))
@@ -157,6 +163,7 @@ class StrategyHandler:
                 # This ensures we can use reduce_only=True safely.
 
     def trailing_tp_logic(self, idx, symbol):
+        idx = int(idx)
         strategy = self.engine.config_handler.get_strategy(symbol)
         if not strategy.get('trailing_tp_enabled', False): return
         price = self.engine.market_handler.get_price(symbol)
@@ -200,6 +207,7 @@ class StrategyHandler:
                         lvl['filled'] = True
 
     def tp_market_logic(self, idx, symbol):
+        idx = int(idx)
         strategy = self.engine.config_handler.get_strategy(symbol)
         price = self.engine.market_handler.get_price(symbol)
         if price <= 0: return
@@ -236,6 +244,7 @@ class StrategyHandler:
                     if s: s['levels'][lid]['filled'] = True
 
     def setup_sl_logic(self, idx, symbol, entry_price, trade_id, override_strategy=None):
+        idx = int(idx)
         strategy = override_strategy or self.engine.config_handler.get_strategy(symbol)
         if not strategy.get('stop_loss_enabled'): return
 
@@ -261,6 +270,7 @@ class StrategyHandler:
                 t['sl_order_id'] = order_id
 
     def stop_loss_logic(self, idx, symbol):
+        idx = int(idx)
         # Stop loss is handled by Binance STOP_MARKET orders.
         strategy = self.engine.config_handler.get_strategy(symbol)
         if not strategy.get('stop_loss_enabled'): return
@@ -276,6 +286,7 @@ class StrategyHandler:
                     self.setup_sl_logic(idx, symbol, t['avg_entry_price'], t['trade_id'], override_strategy=strategy)
 
     def trailing_buy_logic(self, idx, symbol):
+        idx = int(idx)
         strategy = self.engine.config_handler.get_strategy(symbol)
         if not strategy: return
         if not strategy.get('trailing_buy_enabled'): return
@@ -310,6 +321,7 @@ class StrategyHandler:
                     del self.engine.trailing_state[(idx, symbol)]
 
     def conditional_logic(self, idx, symbol):
+        idx = int(idx)
         strategy = self.engine.config_handler.get_strategy(symbol)
         if not strategy: return
         if strategy.get('entry_type') not in ['CONDITIONAL', 'COND_LIMIT', 'COND_MARKET']: return
@@ -335,7 +347,9 @@ class StrategyHandler:
                     self._execute_limit_entry(idx, symbol, limit_p, trade_id=f"cond-{int(time.time())}")
 
     def setup_tp_targets_logic(self, idx, symbol, entry_price, targets, total_qty, direction_override=None, trailing_tp_enabled=False, trade_id=None, override_strategy=None, force_reset=False):
-        if total_qty <= 0:
+        idx = int(idx)
+        formatted_qty = float(self.engine.order_handler.format_quantity(symbol, total_qty))
+        if formatted_qty <= 0:
             return
 
         lock_key = (idx, symbol, trade_id)
@@ -386,7 +400,11 @@ class StrategyHandler:
                         pct = float(first_target.get('percent') or 0)
                         tp_price = entry_price * (1 + pct / 100.0) if direction == 'LONG' else entry_price * (1 - pct / 100.0)
                         side = Client.SIDE_SELL if direction == 'LONG' else Client.SIDE_BUY
-                        state['levels'][1] = {'tp_order_id': None, 'price': tp_price, 'percent': pct, 'qty': qty, 'side': side, 'is_market': tp_market_mode, 'trailing_eligible': False, 'filled': False, 'is_consolidated': True}
+                        state['levels'][1] = {
+                            'tp_order_id': None, 'price': tp_price, 'percent': pct,
+                            'qty': float(self.engine.order_handler.format_quantity(symbol, qty)),
+                            'side': side, 'is_market': tp_market_mode, 'trailing_eligible': False, 'filled': False, 'is_consolidated': True
+                        }
                     else:
                         for i, target in enumerate(targets, 1):
                             pct = float(target.get('percent') or 0)
@@ -394,7 +412,11 @@ class StrategyHandler:
                             side = Client.SIDE_SELL if direction == 'LONG' else Client.SIDE_BUY
                             tp_price = entry_price * (1 + pct / 100.0) if direction == 'LONG' else entry_price * (1 - pct / 100.0)
                             trailing_eligible = (i == len(targets)) and trailing_tp_enabled
-                            state['levels'][i] = {'tp_order_id': None, 'price': tp_price, 'percent': pct, 'qty': qty, 'side': side, 'is_market': tp_market_mode, 'trailing_eligible': trailing_eligible, 'filled': False}
+                            state['levels'][i] = {
+                                'tp_order_id': None, 'price': tp_price, 'percent': pct,
+                                'qty': float(self.engine.order_handler.format_quantity(symbol, qty)),
+                                'side': side, 'is_market': tp_market_mode, 'trailing_eligible': trailing_eligible, 'filled': False
+                            }
 
                 # Build orders_to_place from missing orders
                 orders_to_place = []
