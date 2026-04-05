@@ -451,7 +451,21 @@ class StrategyHandler:
                         orders_to_place.append({'level': lid, 'side': lvl['side'], 'qty': lvl['qty'], 'price': lvl['price'], 'is_consolidated': lvl.get('is_consolidated', False)})
 
             newly_placed_count = 0
+            skipped_notional_count = 0
             for o in orders_to_place:
+                # Local check for min notional to prevent repeated failed attempts and logging
+                ex_info = self.engine.market_handler.exchange_info.get(symbol, {})
+                min_n = ex_info.get('min_notional', 5.0)
+                if o['qty'] * o['price'] < min_n:
+                    skipped_notional_count += 1
+                    # We mark it as 'skipped' so tp_market_logic can pick it up if price reaches it
+                    # by treating it as a virtual level that triggers MARKET exit.
+                    with self.engine.data_lock:
+                        s = next((t for t in self.engine.grid_state.get((idx, symbol), []) if t.get('trade_id') == trade_id), None)
+                        if s and o['level'] in s['levels']:
+                            s['levels'][o['level']]['is_market'] = True
+                    continue
+
                 order_id = None
                 client_id = f"trd-{trade_id}-tp-{o['level']}"
                 with self.engine.data_lock:
@@ -482,5 +496,11 @@ class StrategyHandler:
                     self.engine.log("tp_aggregated_summary", account_name=acc_name, is_key=True, symbol=symbol, qty=self.engine.order_handler.format_quantity(symbol, total_qty), price=self.engine.order_handler.format_price(symbol, state['levels'][1]['price']))
                 else:
                     self.engine.log("tp_placement_summary", account_name=acc_name, is_key=True, symbol=symbol, count=newly_placed_count, total_qty=self.engine.order_handler.format_quantity(symbol, total_qty))
+
+            if skipped_notional_count > 0:
+                log_key = f"min_notional_skip_{idx}_{symbol}"
+                if time.time() - self.engine.last_log_times.get(log_key, 0) > 300:
+                    self.engine.log(f"Skipped {skipped_notional_count} TP level(s) for {symbol} due to Min Notional (< {min_n}). These will be executed as Market Orders if triggered.", level='info', account_name=acc_name)
+                    self.engine.last_log_times[log_key] = time.time()
         finally:
             tp_lock.release()

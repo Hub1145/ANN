@@ -71,7 +71,10 @@ class OrderHandler:
             min_notional = ex_info.get('min_notional', 5.0)
 
             if notional < min_notional:
-                self.engine.log("order_skipped_min_notional", level='warning', account_name=acc_name, is_key=True, symbol=symbol, notional=f"{notional:.2f}", min_notional=f"{min_notional:.2f}")
+                log_key = f"min_notional_{idx}_{symbol}"
+                if time.time() - self.engine.last_log_times.get(log_key, 0) > 300:
+                    self.engine.log("order_skipped_min_notional", level='warning', account_name=acc_name, is_key=True, symbol=symbol, notional=f"{notional:.2f}", min_notional=f"{min_notional:.2f}")
+                    self.engine.last_log_times[log_key] = time.time()
                 return None
 
             params = {
