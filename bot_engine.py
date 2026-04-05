@@ -158,6 +158,7 @@ class BinanceTradingBotEngine:
                 self.bg_clients[i] = {'client': client, 'twm': twm, 'name': acc.get('name', f"Account {i+1}"), 'info': acc}
 
     def _handle_user_data(self, idx, msg):
+        idx = int(idx)
         event_type = msg.get('e')
         if event_type == 'ORDER_TRADE_UPDATE':
             self._on_order_update(idx, msg.get('o', {}))
@@ -223,14 +224,34 @@ class BinanceTradingBotEngine:
         with self.data_lock:
             trades = self.grid_state.get((idx, symbol), [])
             state = None
+            c_oid = order_data.get('c') # Client Order ID
+
             for t in trades:
-                if any(str(oid) == s_order_id for oid in t.get('initial_orders', {})) or str(t.get('initial_order_id')) == s_order_id:
+                # Check match by Client ID or Exchange ID
+                # Entry match
+                if (c_oid and str(t.get('initial_order_id')) == str(c_oid)) or str(t.get('initial_order_id')) == s_order_id:
                     state = t; break
-                if t.get('levels') and any(str(l.get('tp_order_id')) == s_order_id for l in t['levels'].values()):
+                if any(str(oid) == s_order_id for oid in t.get('initial_orders', {})):
+                    state = t; break
+
+                # TP match
+                if t.get('levels'):
+                    if any(str(l.get('tp_order_id')) == s_order_id for l in t['levels'].values()):
+                        state = t; break
+                    if c_oid and any(f"trd-{t['trade_id']}-tp-{lid}" == str(c_oid) for lid in t['levels'].keys()):
+                        state = t; break
+
+                # SL match
+                if str(t.get('sl_order_id')) == s_order_id or (c_oid and str(c_oid) == f"trd-{t['trade_id']}-sl"):
                     state = t; break
 
             if state:
-                if any(str(oid) == s_order_id for oid in state.get('initial_orders', {})) or str(state.get('initial_order_id')) == s_order_id:
+                # Determine if this was the initial entry fill
+                is_initial = (c_oid and str(state.get('initial_order_id')) == str(c_oid)) or \
+                             (str(state.get('initial_order_id')) == s_order_id) or \
+                             (any(str(oid) == s_order_id for oid in state.get('initial_orders', {})))
+
+                if is_initial:
                     state['initial_filled'] = True
                     if 'initial_orders' not in state: state['initial_orders'] = {}
                     state['initial_orders'][order_id] = {'qty': filled_qty, 'price': avg_price, 'filled': True}

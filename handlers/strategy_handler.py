@@ -110,57 +110,83 @@ class StrategyHandler:
         client = self.engine.accounts[idx]['client']
         direction = strategy.get('direction', 'LONG')
         side = 'BUY' if direction == 'LONG' else 'SELL'
+        client_id = f"mkt-{trade_id}"
 
-        self.engine.log("placing_market_initial", account_name=self.engine.accounts[idx]['info'].get('name'), is_key=True, direction=direction)
-        order = self.engine.safe_api_call(client.futures_create_order,
-            symbol=symbol, side=side, type=Client.FUTURE_ORDER_TYPE_MARKET, quantity=self.engine.order_handler.format_quantity(symbol, qty))
-
+        # 1. Pre-register trade state before API call
         with self.engine.data_lock:
             if (idx, symbol) not in self.engine.grid_state: self.engine.grid_state[(idx, symbol)] = []
-            oid = order['orderId']
-            actual_qty = float(order.get('cumQty', qty))
-            actual_price = float(order.get('avgPrice', price)) or price
-
             self.engine.grid_state[(idx, symbol)].append({
-                'trade_id': trade_id, 'initial_filled': True, 'initial_order_id': oid,
-                'initial_orders': {oid: {'qty': actual_qty, 'price': actual_price, 'filled': True}},
-                'quantity': actual_qty, 'avg_entry_price': actual_price, 'direction': direction,
-                'strategy': strategy, 'levels': {}
+                'trade_id': trade_id, 'initial_filled': False, 'initial_order_id': client_id,
+                'quantity': qty, 'avg_entry_price': price, 'direction': direction,
+                'strategy': strategy, 'levels': {},
+                'pending_tp_grid': strategy.get('tp_enabled', True)
             })
 
-            # Immediate TP/SL
-            self.setup_sl_logic(idx, symbol, actual_price, trade_id, override_strategy=strategy)
-            if strategy.get('tp_enabled', True):
-                self.setup_tp_targets_logic(idx, symbol, actual_price, strategy.get('tp_targets', []), actual_qty, direction_override=direction, trailing_tp_enabled=strategy.get('trailing_tp_enabled', False), trade_id=trade_id, override_strategy=strategy, force_reset=True)
+        self.engine.log("placing_market_initial", account_name=self.engine.accounts[idx]['info'].get('name'), is_key=True, direction=direction)
+        try:
+            order = self.engine.safe_api_call(client.futures_create_order,
+                symbol=symbol, side=side, type=Client.FUTURE_ORDER_TYPE_MARKET,
+                quantity=self.engine.order_handler.format_quantity(symbol, qty),
+                newClientOrderId=client_id)
+
+            with self.engine.data_lock:
+                trades = self.engine.grid_state.get((idx, symbol), [])
+                t = next((tr for tr in trades if tr['trade_id'] == trade_id), None)
+                if t:
+                    oid = str(order['orderId'])
+                    actual_qty = float(order.get('cumQty', qty))
+                    actual_price = float(order.get('avgPrice', price)) or price
+                    t.update({
+                        'initial_filled': True, 'initial_order_id': oid,
+                        'initial_orders': {oid: {'qty': actual_qty, 'price': actual_price, 'filled': True}},
+                        'quantity': actual_qty, 'avg_entry_price': actual_price
+                    })
+
+                    # Immediate TP/SL
+                    self.setup_sl_logic(idx, symbol, actual_price, trade_id, override_strategy=strategy)
+                    if strategy.get('tp_enabled', True):
+                        self.setup_tp_targets_logic(idx, symbol, actual_price, strategy.get('tp_targets', []), actual_qty, direction_override=direction, trailing_tp_enabled=strategy.get('trailing_tp_enabled', False), trade_id=trade_id, override_strategy=strategy, force_reset=True)
+        except Exception as e:
+            logging.error(f"Market entry failed: {e}")
+            with self.engine.data_lock:
+                trades = self.engine.grid_state.get((idx, symbol), [])
+                self.engine.grid_state[(idx, symbol)] = [t for t in trades if t['trade_id'] != trade_id]
 
     def _execute_limit_entry(self, idx, symbol, price, trade_id, override_strategy=None):
         idx = int(idx)
         strategy = override_strategy or self.engine.config_handler.get_strategy(symbol)
-        # Use entry_price from strategy if available
         price = float(strategy.get('entry_price', price))
         qty = (float(strategy.get('trade_amount_usdc', 10)) * int(strategy.get('leverage', 20))) / price
 
         direction = strategy.get('direction', 'LONG')
         side = 'BUY' if direction == 'LONG' else 'SELL'
-        order_id = self.engine.order_handler.place_limit_order(idx, symbol, side, qty, price, client_id=f"entry-{trade_id}")
+        client_id = f"ent-{trade_id}"
+
+        # 1. Pre-register in grid_state BEFORE calling API.
+        with self.engine.data_lock:
+            if (idx, symbol) not in self.engine.grid_state: self.engine.grid_state[(idx, symbol)] = []
+            self.engine.grid_state[(idx, symbol)].append({
+                'trade_id': trade_id, 'initial_filled': False, 'initial_order_id': client_id,
+                'quantity': qty, 'avg_entry_price': price, 'direction': direction,
+                'strategy': strategy, 'levels': {},
+                'pending_tp_grid': strategy.get('tp_enabled', True)
+            })
+
+        order_id = self.engine.order_handler.place_limit_order(idx, symbol, side, qty, price, client_id=client_id)
 
         if order_id:
             self.engine.log("placing_limit_order", account_name=self.engine.accounts[idx]['info'].get('name'), is_key=True, symbol=symbol, side=side, qty=self.engine.order_handler.format_quantity(symbol, qty), price=self.engine.order_handler.format_price(symbol, price))
             with self.engine.data_lock:
-                if (idx, symbol) not in self.engine.grid_state: self.engine.grid_state[(idx, symbol)] = []
-                # Register the trade in grid_state
-                self.engine.grid_state[(idx, symbol)].append({
-                    'trade_id': trade_id, 'initial_filled': False, 'initial_order_id': order_id,
-                    'quantity': qty, 'avg_entry_price': price, 'direction': direction,
-                    'strategy': strategy, 'levels': {},
-                    'pending_tp_grid': strategy.get('tp_enabled', True)
-                })
-
-                # Immediate SL placement (STOP_MARKET with closePosition=True works even without position)
-                self.setup_sl_logic(idx, symbol, price, trade_id, override_strategy=strategy)
-
-                # Take Profit placement is now deferred until the entry order fills.
-                # This ensures we can use reduce_only=True safely.
+                trades = self.engine.grid_state.get((idx, symbol), [])
+                t = next((tr for tr in trades if tr['trade_id'] == trade_id), None)
+                if t:
+                    t['initial_order_id'] = str(order_id)
+                    # Immediate SL placement
+                    self.setup_sl_logic(idx, symbol, price, trade_id, override_strategy=strategy)
+        else:
+            with self.engine.data_lock:
+                trades = self.engine.grid_state.get((idx, symbol), [])
+                self.engine.grid_state[(idx, symbol)] = [t for t in trades if t['trade_id'] != trade_id]
 
     def trailing_tp_logic(self, idx, symbol):
         idx = int(idx)
